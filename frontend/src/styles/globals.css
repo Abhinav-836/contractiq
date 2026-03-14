@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #080C14;
+  color: #E2E8F0;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F1623;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E2D3D;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2A3A4A;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.glass {
+  background: rgba(15, 22, 35, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(30, 45, 61, 0.5);
+}
+
+.glow {
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.2);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 30px rgba(0, 212, 170, 0.3);
+  transition: box-shadow 0.3s ease;
+}

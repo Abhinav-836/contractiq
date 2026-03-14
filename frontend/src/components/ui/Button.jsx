@@ -1,0 +1,1 @@
+export default function Button({children,onClick,disabled,style={}}){return(<button onClick={onClick} disabled={disabled} style={{padding:'9px 18px',borderRadius:8,border:'none',background:'#00D4AA',color:'#080C14',fontSize:14,fontWeight:700,cursor:disabled?'not-allowed':'pointer',opacity:disabled?0.5:1,...style}}>{children}</button>)}

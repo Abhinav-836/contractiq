@@ -1,0 +1,1 @@
+export default function Badge({children,variant='default'}){const c={success:'#10B981',warning:'#F59E0B',danger:'#EF4444',info:'#3B82F6',teal:'#00D4AA',default:'#64748B'}[variant]||'#64748B';return(<span style={{fontSize:11,fontWeight:600,color:c,background:`${c}18`,padding:'2px 8px',borderRadius:99,border:`1px solid ${c}25`}}>{children}</span>)}
