@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-change-in-production"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
-    # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./contractiq.db"
+    # Database - PostgreSQL for production
+    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/contractiq"
 
     # Storage
     UPLOAD_DIR: str = "uploads"
@@ -22,26 +22,26 @@ class Settings(BaseSettings):
     # LLM - Ollama Primary with GPT-OSS 20B
     LLM_PROVIDER: str = "ollama"
     
-    # Ollama (Primary) - GPT-OSS 20B
+    # Ollama (Primary)
     OLLAMA_BASE_URL: str = "https://api.ollama.com"
-    OLLAMA_MODEL: str = "gpt-oss:20b"  # Correct model name
+    OLLAMA_MODEL: str = "gpt-oss:20b"
     OLLAMA_API_KEY: Optional[str] = None
     OLLAMA_IS_CLOUD: bool = True
     
     # Gemini (First Fallback)
-    GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"
     
     # OpenAI (Second Fallback)
-    OPENAI_API_KEY: str = ""
+    OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
 
     # JWT
-    JWT_SECRET: str = "dev-jwt-secret"
+    JWT_SECRET: str = "dev-jwt-secret-change-this"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 10080
 
-    # Redis
+    # Redis (optional)
     REDIS_URL: str = "redis://localhost:6379/0"
 
     @property
@@ -54,8 +54,23 @@ class Settings(BaseSettings):
 
     @property
     def effective_llm_provider(self) -> str:
-        """Always return ollama as primary"""
+        """Return the primary LLM provider"""
         return self.LLM_PROVIDER
+
+    @property
+    def is_sqlite(self) -> bool:
+        """Check if using SQLite database"""
+        return "sqlite" in self.DATABASE_URL
+
+    def validate_required_secrets(self) -> List[str]:
+        """Validate that required secrets are set in production"""
+        missing = []
+        if self.APP_ENV == "production":
+            if self.SECRET_KEY == "dev-secret-change-in-production":
+                missing.append("SECRET_KEY")
+            if self.JWT_SECRET == "dev-jwt-secret-change-this":
+                missing.append("JWT_SECRET")
+        return missing
 
     class Config:
         env_file = ".env"
@@ -67,3 +82,9 @@ settings = Settings()
 
 # Create upload dir on import
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+# Validate secrets in production
+if settings.APP_ENV == "production":
+    missing = settings.validate_required_secrets()
+    if missing:
+        raise ValueError(f"Missing required secrets in production: {', '.join(missing)}")
