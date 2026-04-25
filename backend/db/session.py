@@ -5,31 +5,29 @@ from core.logger import get_logger
 
 logger = get_logger(__name__)
 
-# PostgreSQL connection configuration
-connect_args = {}
+# Configure engine based on database type
 if "postgresql" in settings.DATABASE_URL:
-    # PostgreSQL specific settings
-    connect_args = {
-        "server_settings": {
-            "jit": "off",  # Disable JIT for better performance
-            "statement_timeout": "30000",  # 30 second timeout
-        }
-    }
+    # PostgreSQL specific settings with connection pooling
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
 elif "sqlite" in settings.DATABASE_URL:
-    # SQLite settings (for local development)
-    connect_args = {
-        "check_same_thread": False,
-        "timeout": 30,
-    }
-
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    connect_args=connect_args,
-    pool_size=20,  # Connection pool size for PostgreSQL
-    max_overflow=10,  # Extra connections beyond pool_size
-    pool_pre_ping=True,  # Verify connections before using
-)
+    # SQLite settings (no pooling)
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    # Default fallback
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
@@ -65,14 +63,7 @@ async def init_db():
     import modules.users.models
 
     async with engine.begin() as conn:
-        # For production, you should use Alembic migrations
-        # This is only for development/quick start
-        if settings.APP_ENV != "production":
-            await conn.run_sync(Base.metadata.create_all)
-            logger.info("database.tables_created")
-        else:
-            logger.info("database.production_use_migrations")
-    
+        await conn.run_sync(Base.metadata.create_all)
     logger.info("database.initialized")
 
 

@@ -61,8 +61,11 @@ async def validate_database_connection():
     """Validate database connection on startup"""
     try:
         from db.session import AsyncSessionLocal
+        from sqlalchemy import text
+        
         async with AsyncSessionLocal() as db:
-            await db.execute("SELECT 1")
+            # Fix: Use text() for raw SQL
+            await db.execute(text("SELECT 1"))
             logger.info("database.connection_verified")
             return True
     except Exception as e:
