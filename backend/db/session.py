@@ -9,9 +9,12 @@ logger = get_logger(__name__)
 # Configure engine based on database type
 if "postgresql" in settings.DATABASE_URL:
     # Check if it's Supabase (needs SSL)
-    if "supabase" in settings.DATABASE_URL:
-        # Supabase requires SSL context
+    if "supabase" in settings.DATABASE_URL or "pooler" in settings.DATABASE_URL:
+        # Supabase requires SSL context - bypass certificate verification
         ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
         engine = create_async_engine(
             settings.DATABASE_URL,
             echo=settings.DEBUG,
