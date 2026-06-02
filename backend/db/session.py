@@ -2,45 +2,25 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from core.config import settings
 from core.logger import get_logger
-import ssl
 
 logger = get_logger(__name__)
 
 # Configure engine based on database type
 if "postgresql" in settings.DATABASE_URL:
-    # Check if it's Supabase (needs SSL)
-    if "supabase" in settings.DATABASE_URL or "pooler" in settings.DATABASE_URL:
-        # Supabase requires SSL context - bypass certificate verification
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
-        engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=settings.DEBUG,
-            pool_size=20,
-            max_overflow=10,
-            pool_pre_ping=True,
-            connect_args={"ssl": ssl_context},
-        )
-    else:
-        # Regular PostgreSQL (like Render)
-        engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=settings.DEBUG,
-            pool_size=20,
-            max_overflow=10,
-            pool_pre_ping=True,
-        )
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
 elif "sqlite" in settings.DATABASE_URL:
-    # SQLite settings (no pooling)
     engine = create_async_engine(
         settings.DATABASE_URL,
         echo=settings.DEBUG,
         connect_args={"check_same_thread": False},
     )
 else:
-    # Default fallback
     engine = create_async_engine(
         settings.DATABASE_URL,
         echo=settings.DEBUG,
