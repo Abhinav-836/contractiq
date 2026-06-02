@@ -5,26 +5,14 @@ from core.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Configure engine based on database type
-if "postgresql" in settings.DATABASE_URL:
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        echo=settings.DEBUG,
-        pool_size=20,
-        max_overflow=10,
-        pool_pre_ping=True,
-    )
-elif "sqlite" in settings.DATABASE_URL:
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        echo=settings.DEBUG,
-        connect_args={"check_same_thread": False},
-    )
-else:
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        echo=settings.DEBUG,
-    )
+# Create async engine directly - SQLAlchemy will use asyncpg because of +asyncpg in URL
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
@@ -33,7 +21,6 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
     autocommit=False,
 )
-
 
 from typing import AsyncGenerator
 
@@ -48,7 +35,6 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
-
 async def init_db():
     """Create all tables on startup."""
     from db.base import Base
@@ -62,7 +48,6 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("database.initialized")
-
 
 async def close_db():
     """Close database connections on shutdown."""
