@@ -2,16 +2,21 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from core.config import settings
 from core.logger import get_logger
+import ssl
 
 logger = get_logger(__name__)
 
-# Create async engine directly - SQLAlchemy will use asyncpg because of +asyncpg in URL
+# Create SSL context for Neon
+ssl_context = ssl.create_default_context()
+
+# Create async engine with SSL configuration
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     pool_size=20,
     max_overflow=10,
     pool_pre_ping=True,
+    connect_args={"ssl": ssl_context},
 )
 
 AsyncSessionLocal = async_sessionmaker(
