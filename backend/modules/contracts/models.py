@@ -10,9 +10,13 @@ class Contract(Base):
     file_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=False)
     file_path = Column(String, nullable=False)
-    status = Column(String, default="processing", nullable=False)
-    risk_level = Column(String, nullable=True)
+    status = Column(String, default="processing", nullable=False, index=True)
+    risk_level = Column(String, nullable=True, index=True)
     extracted_text = Column(Text, nullable=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

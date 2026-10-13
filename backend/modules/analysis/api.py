@@ -1,12 +1,13 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from .models import Analysis
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.dependencies import get_db
-from core.security import get_current_user_id
+from core.security import require_auth
+from .models import Analysis
 from .repository import AnalysisRepository
 from .schemas import AnalysisOut
-from typing import Optional
 
 router = APIRouter()
 
@@ -15,15 +16,12 @@ router = APIRouter()
 async def get_analysis_by_contract(
     contract_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id),
+    user_id: str = Depends(require_auth),
 ):
-    """Get analysis for a specific contract"""
     repo = AnalysisRepository(db)
     analysis = await repo.get_by_contract(contract_id)
-    
     if not analysis:
         raise HTTPException(404, "Analysis not found for this contract")
-    
     return repo.serialize(analysis)
 
 
@@ -31,15 +29,10 @@ async def get_analysis_by_contract(
 async def get_analysis(
     analysis_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
 ):
-    """Get analysis by ID"""
-    result = await db.execute(
-        select(Analysis).where(Analysis.id == analysis_id)
-    )
+    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
     analysis = result.scalar_one_or_none()
-    
     if not analysis:
         raise HTTPException(404, "Analysis not found")
-    
-    repo = AnalysisRepository(db)
-    return repo.serialize(analysis)
+    return AnalysisRepository(db).serialize(analysis)

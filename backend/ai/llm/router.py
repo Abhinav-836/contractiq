@@ -1,54 +1,63 @@
 # ai/llm/router.py
+import threading
+
 from ai.llm.base import BaseLLMClient
 from core.config import settings
 from core.logger import get_logger
 
 logger = get_logger(__name__)
 
+_lock = threading.Lock()
 _client: BaseLLMClient | None = None
-_fallback_clients: list = []
+_fallback_clients: list[tuple[str, BaseLLMClient]] = []
 
 
 def get_llm_client() -> BaseLLMClient:
-    """Get primary LLM client (Ollama with GPT-OS 20B)"""
+    """Primary: Ollama Cloud (GPT-OSS 20B)."""
     global _client
-    if _client is None:
-        logger.info("llm.router.primary", provider="ollama", model=settings.OLLAMA_MODEL)
-        from ai.llm.ollama_client import OllamaClient
-        _client = OllamaClient()
-    return _client
+    with _lock:
+        if _client is None:
+            from ai.llm.ollama_client import OllamaClient
+            _client = OllamaClient()
+            logger.info(
+                f"llm.router.primary provider={_client.provider_name} model={_client.model_name}"
+            )
+        return _client
 
 
-def get_fallback_clients():
-    """Get fallback clients in order: Gemini -> OpenAI -> Mock"""
+def get_fallback_clients() -> list[tuple[str, BaseLLMClient]]:
+    """Fallback order: Gemini → OpenAI → Mock."""
     global _fallback_clients
-    if not _fallback_clients:
-        # First fallback: Gemini
+    with _lock:
+        if _fallback_clients:
+            return _fallback_clients
+
+        chain: list[tuple[str, BaseLLMClient]] = []
+
         if settings.GEMINI_API_KEY:
             from ai.llm.gemini_client import GeminiClient
-            _fallback_clients.append(("gemini", GeminiClient()))
-            logger.info("llm.router.fallback.available", provider="gemini", order=1)
+            chain.append(("gemini", GeminiClient()))
+            logger.info("llm.router.fallback provider=gemini order=1")
         else:
-            logger.warning("Gemini not configured - skipping fallback")
-        
-        # Second fallback: OpenAI
+            logger.warning("llm.router.fallback gemini_not_configured")
+
         if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY.startswith("sk-"):
             from ai.llm.openai_client import OpenAIClient
-            _fallback_clients.append(("openai", OpenAIClient()))
-            logger.info("llm.router.fallback.available", provider="openai", order=2)
+            chain.append(("openai", OpenAIClient()))
+            logger.info("llm.router.fallback provider=openai order=2")
         else:
-            logger.warning("OpenAI not configured - skipping fallback")
-        
-        # Final fallback: Mock (always available)
+            logger.warning("llm.router.fallback openai_not_configured")
+
         from ai.llm.mock_client import MockLLMClient
-        _fallback_clients.append(("mock", MockLLMClient()))
-        logger.info("llm.router.fallback.available", provider="mock", order=3)
-    
-    return _fallback_clients
+        chain.append(("mock", MockLLMClient()))
+        logger.info("llm.router.fallback provider=mock order=3")
+
+        _fallback_clients = chain
+        return _fallback_clients
 
 
 def reset_client():
-    """Force re-initialization (useful for testing)."""
     global _client, _fallback_clients
-    _client = None
-    _fallback_clients = []
+    with _lock:
+        _client = None
+        _fallback_clients = []

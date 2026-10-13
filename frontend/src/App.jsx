@@ -21,26 +21,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Toaster 
+        <Toaster
           position="top-right"
           toastOptions={{
-            style: {
-              background: '#0F1623',
-              color: '#E2E8F0',
-              border: '1px solid #1E2D3D',
-            },
-            success: {
-              iconTheme: {
-                primary: '#00D4AA',
-                secondary: '#0F1623',
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: '#EF4444',
-                secondary: '#0F1623',
-              },
-            },
+            style: { background: '#0F1623', color: '#E2E8F0', border: '1px solid #1E2D3D' },
+            success: { iconTheme: { primary: '#00D4AA', secondary: '#0F1623' } },
+            error: { iconTheme: { primary: '#EF4444', secondary: '#0F1623' } },
           }}
         />
         <Routes>
@@ -51,15 +37,17 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/contracts" element={<ContractsPage />} />
-              <Route path="/contracts/:id" element={<ContractDetail />} />
               <Route path="/contracts/upload" element={<UploadContract />} />
+              <Route path="/contracts/:id" element={<ContractDetail />} />
               <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="/analysis/:id" element={<ClauseViewer />} />
               <Route path="/obligations" element={<ObligationsPage />} />
               <Route path="/obligations/:id" element={<ObligationDetail />} />
               <Route path="/alerts" element={<AlertsPage />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

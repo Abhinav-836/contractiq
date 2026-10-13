@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { api } from '../lib/axios'
 import toast from 'react-hot-toast'
 
@@ -10,23 +10,22 @@ export const useAuthStore = create(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      _hasHydrated: false,
+
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
 
       login: async (email, password) => {
         set({ isLoading: true })
         try {
-          const response = await api.post('/api/v1/auth/login', { email, password })
-          const { access_token, user } = response.data
-          
-          // Store token
+          const { data } = await api.post('/api/v1/auth/login', { email, password })
+          const { access_token, user } = data
           sessionStorage.setItem('ciq_token', access_token)
-          
-          set({ 
-            user, 
-            token: access_token, 
+          set({
+            user,
+            token: access_token,
             isAuthenticated: true,
-            isLoading: false 
+            isLoading: false,
           })
-          
           toast.success(`Welcome back, ${user.name}!`)
           return { success: true }
         } catch (error) {
@@ -40,19 +39,16 @@ export const useAuthStore = create(
       register: async (userData) => {
         set({ isLoading: true })
         try {
-          const response = await api.post('/api/v1/auth/register', userData)
-          const { access_token, user } = response.data
-          
+          const { data } = await api.post('/api/v1/auth/register', userData)
+          const { access_token, user } = data
           sessionStorage.setItem('ciq_token', access_token)
-          
-          set({ 
-            user, 
-            token: access_token, 
+          set({
+            user,
+            token: access_token,
             isAuthenticated: true,
-            isLoading: false 
+            isLoading: false,
           })
-          
-          toast.success('Account created successfully!')
+          toast.success('Account created!')
           return { success: true }
         } catch (error) {
           set({ isLoading: false })
@@ -65,16 +61,22 @@ export const useAuthStore = create(
       logout: () => {
         sessionStorage.removeItem('ciq_token')
         set({ user: null, token: null, isAuthenticated: false })
-        toast.success('Logged out successfully')
+        toast.success('Logged out')
       },
 
-      updateUser: (userData) => {
-        set({ user: { ...get().user, ...userData } })
-      },
+      updateUser: (userData) => set({ user: { ...get().user, ...userData } }),
     }),
     {
       name: 'auth-storage',
-      getStorage: () => sessionStorage,
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     }
   )
 )

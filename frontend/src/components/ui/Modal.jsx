@@ -1,1 +1,47 @@
-export default function Modal({isOpen,onClose,title,children}){if(!isOpen)return null;return(<div style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.7)'}} onClick={onClose}><div style={{background:'#0F1623',border:'1px solid #1E2D3D',borderRadius:16,padding:24,maxWidth:480,width:'100%',margin:16}} onClick={e=>e.stopPropagation()}>{title&&<h2 style={{color:'#E2E8F0',marginBottom:16}}>{title}</h2>}{children}</div></div>)}
+import { useEffect } from 'react'
+
+export default function Modal({ isOpen, onClose, title, children }) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handler = (e) => e.key === 'Escape' && onClose?.()
+    document.addEventListener('keydown', handler)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', handler)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.7)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#0F1623',
+          border: '1px solid #1E2D3D',
+          borderRadius: 16,
+          padding: 24,
+          maxWidth: 480,
+          width: '100%',
+          margin: 16,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {title && <h2 style={{ color: '#E2E8F0', marginBottom: 16, marginTop: 0 }}>{title}</h2>}
+        {children}
+      </div>
+    </div>
+  )
+}

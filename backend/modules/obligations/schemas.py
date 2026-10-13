@@ -11,7 +11,6 @@ class ObligationBase(BaseModel):
     due_date: Optional[str] = None
     assigned_to: Optional[str] = None
     contract_id: str
-    obligated_party: Optional[str] = None
 
 
 class ObligationCreate(ObligationBase):
@@ -40,10 +39,3 @@ class ObligationStatsOut(BaseModel):
     overdue: int
     pending: int
     completed: int
-
-
-class ObligationListResponse(BaseModel):
-    obligations: List[ObligationOut]
-    total: int
-    page: int
-    limit: int

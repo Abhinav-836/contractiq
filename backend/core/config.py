@@ -12,26 +12,26 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-change-in-production"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
-    # Database - PostgreSQL for production
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/contractiq"
+    # Database - SQLite for dev, Postgres for prod
+    DATABASE_URL: str = "sqlite+aiosqlite:///./contractiq.db"
 
     # Storage
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE_MB: int = 50
 
-    # LLM - Ollama Primary with GPT-OSS 20B
+    # LLM - Ollama Cloud Primary with GPT-OSS 20B
     LLM_PROVIDER: str = "ollama"
-    
-    # Ollama (Primary)
-    OLLAMA_BASE_URL: str = "https://api.ollama.com"
+
+    # Ollama Cloud
+    OLLAMA_BASE_URL: str = "https://ollama.com"
     OLLAMA_MODEL: str = "gpt-oss:20b"
     OLLAMA_API_KEY: Optional[str] = None
     OLLAMA_IS_CLOUD: bool = True
-    
+
     # Gemini (First Fallback)
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"
-    
+
     # OpenAI (Second Fallback)
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property
     def max_file_size_bytes(self) -> int:
@@ -54,22 +54,21 @@ class Settings(BaseSettings):
 
     @property
     def effective_llm_provider(self) -> str:
-        """Return the primary LLM provider"""
         return self.LLM_PROVIDER
 
     @property
     def is_sqlite(self) -> bool:
-        """Check if using SQLite database"""
-        return "sqlite" in self.DATABASE_URL
+        return self.DATABASE_URL.startswith("sqlite")
 
     def validate_required_secrets(self) -> List[str]:
-        """Validate that required secrets are set in production"""
         missing = []
         if self.APP_ENV == "production":
             if self.SECRET_KEY == "dev-secret-change-in-production":
                 missing.append("SECRET_KEY")
             if self.JWT_SECRET == "dev-jwt-secret-change-this":
                 missing.append("JWT_SECRET")
+            if self.LLM_PROVIDER == "ollama" and not self.OLLAMA_API_KEY:
+                missing.append("OLLAMA_API_KEY (required when LLM_PROVIDER=ollama)")
         return missing
 
     class Config:
@@ -80,11 +79,9 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Create upload dir on import
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-# Validate secrets in production
 if settings.APP_ENV == "production":
-    missing = settings.validate_required_secrets()
-    if missing:
-        raise ValueError(f"Missing required secrets in production: {', '.join(missing)}")
+    _missing = settings.validate_required_secrets()
+    if _missing:
+        raise ValueError(f"Missing required secrets in production: {', '.join(_missing)}")

@@ -1,74 +1,58 @@
-// src/pages/Contracts/ContractDetail.jsx
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getContract, getContractAnalysis } from '../../services/contractService'
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { getContract, getContractAnalysis, deleteContract } from '../../services/contractService'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import Badge from '../../components/ui/Badge'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { formatDate } from '../../utils/formatters'
+import toast from 'react-hot-toast'
 
-const statusColors = {
-  processing: { bg: '#8B5CF6', text: 'Processing' },
-  completed: { bg: '#10B981', text: 'Completed' },
-  failed: { bg: '#EF4444', text: 'Failed' }
-}
-
-const riskColors = {
-  high: { bg: '#EF4444', text: 'High Risk' },
-  medium: { bg: '#F59E0B', text: 'Medium Risk' },
-  low: { bg: '#10B981', text: 'Low Risk' }
-}
+const statusText = { processing: 'Analyzing', completed: 'Completed', failed: 'Failed' }
 
 export default function ContractDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const location = useLocation()
-  const queryClient = useQueryClient()
-  
-  const queryParams = new URLSearchParams(location.search)
-  const timestamp = queryParams.get('t')
 
-  // Get contract details with cache busting
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const { data: contract, isLoading: contractLoading } = useQuery({
-    queryKey: ['contract', id, timestamp],
+    queryKey: ['contract', id],
     queryFn: () => getContract(id),
-    staleTime: 0, // Always fetch fresh data
-  })
-
-  // Get analysis with proper polling
-  const { data: analysis, isLoading: analysisLoading } = useQuery({
-    queryKey: ['analysis', id, timestamp],
-    queryFn: () => getContractAnalysis(id),
-    refetchInterval: (query) => {
-      const data = query.state.data
-      // Stop polling if we have analysis or contract is completed/failed
-      if (data || contract?.status === 'completed' || contract?.status === 'failed') {
-        return false
-      }
-      return 3000 // Poll every 3 seconds while processing
-    },
     enabled: !!id,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'processing' ? 3000 : false,
   })
 
-  const isLoading = contractLoading || analysisLoading
-  // Check if still processing - ONLY if contract status is processing AND no analysis yet
-  const isProcessing = contract?.status === 'processing' && !analysis
+  const { data: analysis, isLoading: analysisLoading } = useQuery({
+    queryKey: ['analysis', id],
+    queryFn: () => getContractAnalysis(id),
+    enabled: !!id && contract?.status === 'completed',
+  })
 
-  // Force refresh when analysis completes
-  useEffect(() => {
-    if (analysis) {
-      // Invalidate contract query to refresh status
-      queryClient.invalidateQueries({ queryKey: ['contract', id] })
+  const isLoading = contractLoading || (contract?.status === 'completed' && analysisLoading)
+  const isProcessing = contract?.status === 'processing'
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteContract(id)
+      toast.success('Contract deleted')
+      navigate('/contracts')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete contract')
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
     }
-  }, [analysis, id, queryClient])
+  }
 
   if (isLoading && !contract) {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
         <Spinner size="large" />
-        <p style={{ color: '#64748B', marginTop: 16 }}>Loading contract details...</p>
       </div>
     )
   }
@@ -94,42 +78,60 @@ export default function ContractDetail() {
           cursor: 'pointer',
           fontSize: 14,
           marginBottom: 20,
-          padding: 0
+          padding: 0,
         }}
       >
         ← Back to Contracts
       </button>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+      {/* Header with Delete button */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          marginBottom: 24,
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
         <div>
-          <h1 style={{ fontFamily: 'Sora,sans-serif', fontWeight: 700, fontSize: 24, color: '#E2E8F0', marginBottom: 8 }}>
+          <h1
+            style={{
+              fontFamily: 'Sora,sans-serif',
+              fontWeight: 700,
+              fontSize: 24,
+              color: '#E2E8F0',
+              marginBottom: 8,
+            }}
+          >
             {contract.filename}
           </h1>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Badge variant={contract.status}>
-              {statusColors[contract.status]?.text || contract.status}
+              {statusText[contract.status] || contract.status}
             </Badge>
             {contract.risk_level && (
-              <Badge variant={contract.risk_level}>
-                {riskColors[contract.risk_level]?.text}
-              </Badge>
+              <Badge variant={contract.risk_level}>{contract.risk_level} risk</Badge>
             )}
             <span style={{ color: '#64748B', fontSize: 13 }}>
               Uploaded {formatDate(contract.created_at)}
             </span>
           </div>
         </div>
+
         <div style={{ display: 'flex', gap: 12 }}>
           {analysis && (
             <Button variant="outline" onClick={() => navigate(`/analysis/${id}`)}>
               View Full Analysis
             </Button>
           )}
+          <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+            🗑️ Delete
+          </Button>
         </div>
       </div>
 
-      {/* Processing State - Only show when actually processing */}
       {isProcessing && (
         <Card style={{ marginBottom: 24, padding: 32, textAlign: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
@@ -137,20 +139,24 @@ export default function ContractDetail() {
             <div>
               <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>AI Analysis in Progress</h3>
               <p style={{ color: '#64748B', fontSize: 14 }}>
-                Please wait while we analyze your contract.<br />
-                This page will update automatically.
+                Please wait while we analyze your contract. This page will update automatically.
               </p>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Analysis Results */}
-      {analysis && !isProcessing && (
+      {analysis && (
         <>
-          {/* Executive Summary */}
           <Card style={{ marginBottom: 24 }}>
-            <h2 style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, color: '#E2E8F0', marginBottom: 12 }}>
+            <h2
+              style={{
+                fontFamily: 'Sora,sans-serif',
+                fontSize: 18,
+                color: '#E2E8F0',
+                marginBottom: 12,
+              }}
+            >
               Executive Summary
             </h2>
             <p style={{ color: '#94A3B8', lineHeight: 1.7, fontSize: 14 }}>
@@ -158,45 +164,67 @@ export default function ContractDetail() {
             </p>
           </Card>
 
-          {/* Key Clauses */}
-          {analysis.clauses && analysis.clauses.length > 0 && (
+          {analysis.clauses?.length > 0 && (
             <Card style={{ marginBottom: 24 }}>
-              <h2 style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, color: '#E2E8F0', marginBottom: 16 }}>
+              <h2
+                style={{
+                  fontFamily: 'Sora,sans-serif',
+                  fontSize: 18,
+                  color: '#E2E8F0',
+                  marginBottom: 16,
+                }}
+              >
                 Key Clauses
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {analysis.clauses.slice(0, 3).map((clause, index) => (
+                {analysis.clauses.slice(0, 3).map((clause, i) => (
                   <div
-                    key={index}
+                    key={i}
                     style={{
                       padding: 16,
                       background: '#131B2A',
                       borderRadius: 8,
                       border: `1px solid ${
-                        clause.risk_level === 'high' ? '#EF4444' :
-                        clause.risk_level === 'medium' ? '#F59E0B' :
-                        '#10B981'
-                      }30`
+                        clause.risk_level === 'high'
+                          ? '#EF4444'
+                          : clause.risk_level === 'medium'
+                          ? '#F59E0B'
+                          : '#10B981'
+                      }30`,
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                      }}
+                    >
                       <h3 style={{ fontSize: 15, fontWeight: 600, color: '#E2E8F0' }}>
                         {clause.clause_type}
                       </h3>
-                      <Badge variant={clause.risk_level}>
-                        {clause.risk_level} risk
-                      </Badge>
+                      <Badge variant={clause.risk_level}>{clause.risk_level} risk</Badge>
                     </div>
                     <p style={{ color: '#94A3B8', fontSize: 13, marginBottom: 8 }}>
                       {clause.clause_text}
                     </p>
-                    <p style={{ color: '#64748B', fontSize: 13 }}>
-                      {clause.explanation}
-                    </p>
+                    <p style={{ color: '#64748B', fontSize: 13 }}>{clause.explanation}</p>
                     {clause.recommendation && (
-                      <div style={{ marginTop: 8, padding: 8, background: '#0F1623', borderRadius: 6 }}>
-                        <span style={{ color: '#00D4AA', fontSize: 12, fontWeight: 600 }}>Recommendation: </span>
-                        <span style={{ color: '#94A3B8', fontSize: 12 }}>{clause.recommendation}</span>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          padding: 8,
+                          background: '#0F1623',
+                          borderRadius: 6,
+                        }}
+                      >
+                        <span style={{ color: '#00D4AA', fontSize: 12, fontWeight: 600 }}>
+                          Recommendation:{' '}
+                        </span>
+                        <span style={{ color: '#94A3B8', fontSize: 12 }}>
+                          {clause.recommendation}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -204,7 +232,11 @@ export default function ContractDetail() {
               </div>
               {analysis.clauses.length > 3 && (
                 <div style={{ marginTop: 16, textAlign: 'center' }}>
-                  <Button variant="outline" size="small" onClick={() => navigate(`/analysis/${id}`)}>
+                  <Button
+                    variant="outline"
+                    size="small"
+                    onClick={() => navigate(`/analysis/${id}`)}
+                  >
                     View All {analysis.clauses.length} Clauses
                   </Button>
                 </div>
@@ -212,15 +244,21 @@ export default function ContractDetail() {
             </Card>
           )}
 
-          {/* Recommendations */}
-          {analysis.recommendations && analysis.recommendations.length > 0 && (
+          {analysis.recommendations?.length > 0 && (
             <Card>
-              <h2 style={{ fontFamily: 'Sora,sans-serif', fontSize: 18, color: '#E2E8F0', marginBottom: 16 }}>
+              <h2
+                style={{
+                  fontFamily: 'Sora,sans-serif',
+                  fontSize: 18,
+                  color: '#E2E8F0',
+                  marginBottom: 16,
+                }}
+              >
                 Recommendations
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {analysis.recommendations.map((rec, index) => (
-                  <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                {analysis.recommendations.map((rec, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                     <span style={{ color: '#00D4AA', fontSize: 16 }}>•</span>
                     <span style={{ color: '#94A3B8', fontSize: 14 }}>{rec}</span>
                   </div>
@@ -231,19 +269,32 @@ export default function ContractDetail() {
         </>
       )}
 
-      {/* Failed State */}
-      {contract?.status === 'failed' && (
+      {contract.status === 'failed' && (
         <Card style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>Analysis Failed</h3>
           <p style={{ color: '#64748B', fontSize: 14, marginBottom: 20 }}>
-            The analysis encountered an error. Please try uploading the contract again.
+            Please try uploading the contract again.
           </p>
-          <Button onClick={() => navigate('/contracts/upload')}>
-            Upload Again
-          </Button>
+          <Button onClick={() => navigate('/contracts/upload')}>Upload Again</Button>
         </Card>
       )}
+
+      {/* Delete confirmation dialog — MUST be inside the return, at the bottom */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => !isDeleting && setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete contract?"
+        message={
+          contract
+            ? `"${contract.filename}" and all its analysis, obligations, and alerts will be permanently deleted. This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        variant="danger"
+        loading={isDeleting}
+      />
     </div>
   )
 }

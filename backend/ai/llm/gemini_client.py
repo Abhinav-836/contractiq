@@ -1,6 +1,8 @@
-import httpx
 import json
 import re
+
+import httpx
+
 from ai.llm.base import BaseLLMClient
 from core.config import settings
 from core.logger import get_logger
@@ -20,47 +22,41 @@ class GeminiClient(BaseLLMClient):
         return settings.GEMINI_MODEL
 
     async def complete(self, system: str, user: str, json_mode: bool = True) -> str:
-        # Ensure model name doesn't have "models/" prefix
-        model = self.model_name
-        if model.startswith("models/"):
-            model = model.replace("models/", "")
-            
+        model = self.model_name.replace("models/", "")
         url = f"{self.BASE}/{model}:generateContent?key={settings.GEMINI_API_KEY}"
-        
-        # Combine system and user for Gemini with explicit JSON instruction
-        full_prompt = f"{system}\n\n{user}\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown, no code blocks, no explanations."
-        
+
+        full_prompt = (
+            f"{system}\n\n{user}\n\n"
+            "IMPORTANT: Respond with ONLY valid JSON. No markdown, no code blocks."
+        )
+
         payload = {
             "contents": [{"parts": [{"text": full_prompt}]}],
             "generationConfig": {
                 "temperature": 0.2,
                 "maxOutputTokens": 4000,
                 "topP": 0.95,
-                "topK": 40
+                "topK": 40,
+                **({"responseMimeType": "application/json"} if json_mode else {}),
             },
         }
-        
+
         try:
             async with httpx.AsyncClient(timeout=120) as client:
-                logger.info(f"Calling Gemini API with model: {model}")
+                logger.info(f"gemini.request model={model}")
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
                 result = resp.json()
-                
-                # Extract text from Gemini response
-                candidates = result.get("candidates", [])
-                if candidates and candidates[0].get("content", {}).get("parts"):
-                    text = candidates[0]["content"]["parts"][0]["text"]
-                    
-                    # Clean up the response - remove markdown code blocks if present
-                    text = re.sub(r'```json\s*', '', text)
-                    text = re.sub(r'```\s*', '', text)
-                    text = text.strip()
-                    
-                    return text
-                else:
-                    raise Exception("No valid response from Gemini")
-                    
+
+            candidates = result.get("candidates", [])
+            if candidates and candidates[0].get("content", {}).get("parts"):
+                text = candidates[0]["content"]["parts"][0]["text"]
+                text = re.sub(r"```json\s*", "", text)
+                text = re.sub(r"```\s*", "", text)
+                return text.strip()
+
+            raise Exception("No valid response from Gemini")
+
         except Exception as e:
-            logger.error(f"Gemini error: {str(e)}")
+            logger.error(f"gemini.error error={e}")
             raise

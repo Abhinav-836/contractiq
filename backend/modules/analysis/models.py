@@ -6,7 +6,13 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    contract_id = Column(String, ForeignKey("contracts.id"), nullable=False, unique=True, index=True)
+    contract_id = Column(
+        String,
+        ForeignKey("contracts.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
     executive_summary = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     risk_score = Column(Float, nullable=True)

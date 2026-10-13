@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from core.dependencies import get_db
-from core.security import get_current_user_id
-from .models import Obligation
-from .schemas import ObligationOut, ObligationCreate, ObligationUpdate
-from typing import List, Optional
 from datetime import datetime
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select, update, delete, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.dependencies import get_db
+from core.security import require_auth
+from .models import Obligation
+from .schemas import ObligationOut, ObligationUpdate
 
 router = APIRouter()
 
@@ -14,56 +16,40 @@ router = APIRouter()
 @router.get("", response_model=List[ObligationOut])
 async def list_obligations(
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
     contract_id: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
 ):
-    """List obligations with filters"""
-    query = select(Obligation).order_by(Obligation.created_at.desc())
-    
+    q = select(Obligation).order_by(Obligation.created_at.desc())
     if contract_id:
-        query = query.where(Obligation.contract_id == contract_id)
+        q = q.where(Obligation.contract_id == contract_id)
     if status:
-        query = query.where(Obligation.status == status)
+        q = q.where(Obligation.status == status)
     if priority:
-        query = query.where(Obligation.priority == priority)
-    
-    query = query.offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+        q = q.where(Obligation.priority == priority)
+    q = q.offset(skip).limit(limit)
+    return list((await db.execute(q)).scalars().all())
 
 
 @router.get("/stats")
-async def get_obligation_stats(db: AsyncSession = Depends(get_db)):
-    """Get obligation statistics"""
-    total = await db.execute(select(Obligation))
-    total_count = len(total.scalars().all())
-    
-    overdue = await db.execute(
-        select(Obligation).where(
-            Obligation.status == "pending",
-            Obligation.due_date < datetime.now().isoformat()
-        )
-    )
-    overdue_count = len(overdue.scalars().all())
-    
-    pending = await db.execute(
-        select(Obligation).where(Obligation.status == "pending")
-    )
-    pending_count = len(pending.scalars().all())
-    
-    completed = await db.execute(
-        select(Obligation).where(Obligation.status == "completed")
-    )
-    completed_count = len(completed.scalars().all())
-    
+async def get_obligation_stats(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
+):
+    async def count(where=None) -> int:
+        q = select(func.count(Obligation.id))
+        if where is not None:
+            q = q.where(where)
+        return (await db.execute(q)).scalar() or 0
+
     return {
-        "total": total_count,
-        "overdue": overdue_count,
-        "pending": pending_count,
-        "completed": completed_count,
+        "total": await count(),
+        "overdue": await count(Obligation.status == "pending"),
+        "pending": await count(Obligation.status == "pending"),
+        "completed": await count(Obligation.status == "completed"),
     }
 
 
@@ -71,11 +57,9 @@ async def get_obligation_stats(db: AsyncSession = Depends(get_db)):
 async def get_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
 ):
-    """Get obligation by ID"""
-    result = await db.execute(
-        select(Obligation).where(Obligation.id == obligation_id)
-    )
+    result = await db.execute(select(Obligation).where(Obligation.id == obligation_id))
     obligation = result.scalar_one_or_none()
     if not obligation:
         raise HTTPException(404, "Obligation not found")
@@ -86,12 +70,10 @@ async def get_obligation(
 async def complete_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
 ):
-    """Mark obligation as completed"""
     await db.execute(
-        update(Obligation)
-        .where(Obligation.id == obligation_id)
-        .values(status="completed")
+        update(Obligation).where(Obligation.id == obligation_id).values(status="completed")
     )
     await db.commit()
     return {"status": "completed", "id": obligation_id}
@@ -102,14 +84,12 @@ async def update_obligation(
     obligation_id: str,
     data: ObligationUpdate,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
 ):
-    """Update obligation"""
-    values = {k: v for k, v in data.dict().items() if v is not None}
+    values = {k: v for k, v in data.model_dump().items() if v is not None}
     if values:
         await db.execute(
-            update(Obligation)
-            .where(Obligation.id == obligation_id)
-            .values(**values)
+            update(Obligation).where(Obligation.id == obligation_id).values(**values)
         )
         await db.commit()
     return {"status": "updated", "id": obligation_id}
@@ -119,8 +99,8 @@ async def update_obligation(
 async def delete_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_auth),
 ):
-    """Delete obligation"""
     await db.execute(delete(Obligation).where(Obligation.id == obligation_id))
     await db.commit()
     return {"status": "deleted", "id": obligation_id}

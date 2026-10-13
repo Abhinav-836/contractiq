@@ -1,64 +1,46 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { QUERY_KEYS } from '../utils/constants'
 import * as obligationService from '../services/obligationService'
 
-export const useObligations = (filters = {}) => {
-  return useQuery({
-    queryKey: [QUERY_KEYS.OBLIGATIONS, filters],
+export const useObligations = (filters = {}) =>
+  useQuery({
+    queryKey: ['obligations', filters],
     queryFn: () => obligationService.getObligations(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   })
-}
 
-export const useObligation = (id) => {
-  return useQuery({
-    queryKey: [QUERY_KEYS.OBLIGATIONS, id],
+export const useObligation = (id) =>
+  useQuery({
+    queryKey: ['obligation', id],
     queryFn: () => obligationService.getObligation(id),
     enabled: !!id,
   })
-}
 
 export const useCompleteObligation = () => {
-  const queryClient = useQueryClient()
-  
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: obligationService.completeObligation,
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries([QUERY_KEYS.OBLIGATIONS])
-      queryClient.invalidateQueries([QUERY_KEYS.OBLIGATIONS, id])
-      queryClient.invalidateQueries([QUERY_KEYS.DASHBOARD])
-    },
-  })
-}
-
-export const useUpdateObligation = () => {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: ({ id, data }) => obligationService.updateObligation(id, data),
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries([QUERY_KEYS.OBLIGATIONS])
-      queryClient.invalidateQueries([QUERY_KEYS.OBLIGATIONS, id])
+      qc.invalidateQueries({ queryKey: ['obligations'] })
+      qc.invalidateQueries({ queryKey: ['obligation', id] })
+      qc.invalidateQueries({ queryKey: ['obligationStats'] })
     },
   })
 }
 
 export const useDeleteObligation = () => {
-  const queryClient = useQueryClient()
-  
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: obligationService.deleteObligation,
     onSuccess: () => {
-      queryClient.invalidateQueries([QUERY_KEYS.OBLIGATIONS])
-      queryClient.invalidateQueries([QUERY_KEYS.DASHBOARD])
+      qc.invalidateQueries({ queryKey: ['obligations'] })
+      qc.invalidateQueries({ queryKey: ['obligationStats'] })
     },
   })
 }
 
-export const useObligationStats = () => {
-  return useQuery({
-    queryKey: [QUERY_KEYS.OBLIGATIONS, 'stats'],
+export const useObligationStats = () =>
+  useQuery({
+    queryKey: ['obligationStats'],
     queryFn: obligationService.getObligationStats,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000,
   })
-}
