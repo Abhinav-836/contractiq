@@ -71,7 +71,7 @@ export default function UploadContract() {
           Upload Contract
         </h1>
         <p style={{ color: '#64748B', fontSize: 14, marginBottom: 32 }}>
-          Upload a contract for AI-powered analysis. Text-based PDF, DOCX or TXT up to 50MB.
+          Upload a contract for AI-powered analysis. Text-based PDF, DOCX or TXT up to 20MB.
         </p>
 
         <Card>
@@ -112,7 +112,7 @@ export default function UploadContract() {
               </>
             ) : (
               <>
-                <p style={{ color: '#E2E8F0', fontWeight: 500, marginBottom: 8 }}>Upload a contract for AI-powered analysis. PDF (including scanned), DOCX or TXT up to 20MB.</p>
+                <p style={{ color: '#E2E8F0', fontWeight: 500, marginBottom: 8 }}>Drop your contract here or click to browse</p>
                 <p style={{ color: '#64748B', fontSize: 13 }}>PDF, DOCX, TXT (max 20MB)</p>
               </>
             )}

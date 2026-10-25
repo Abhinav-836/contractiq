@@ -330,6 +330,8 @@ export default function ContractDetail() {
               marginRight: 'auto',
             }}
           >
+          We couldn't extract readable text, or the analysis was interrupted. Try again — if it
+          keeps failing, the file may be password-protected, corrupted, or an unreadable scan.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button onClick={handleRetry} disabled={isRetrying}>
