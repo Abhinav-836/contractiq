@@ -23,7 +23,10 @@ class GeminiClient(BaseLLMClient):
 
     async def complete(self, system: str, user: str, json_mode: bool = True) -> str:
         model = self.model_name.replace("models/", "")
-        url = f"{self.BASE}/{model}:generateContent?key={settings.GEMINI_API_KEY}"
+        # Key goes in a header, not the query string: httpx logs every request URL
+        # at INFO level, which printed the API key into Render's logs.
+        url = f"{self.BASE}/{model}:generateContent"
+        headers = {"x-goog-api-key": settings.GEMINI_API_KEY or ""}
 
         full_prompt = (
             f"{system}\n\n{user}\n\n"
@@ -44,7 +47,7 @@ class GeminiClient(BaseLLMClient):
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 logger.info(f"gemini.request model={model}")
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 result = resp.json()
 

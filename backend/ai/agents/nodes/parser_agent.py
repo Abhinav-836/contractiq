@@ -32,25 +32,53 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
-# Order matters — most specific first
+# Order matters — most specific first. Matched on word boundaries so "nda"
+# no longer matches "standard"/"calendar"/"agenda".
 _TYPE_PATTERNS: list[tuple[list[str], str]] = [
-    (["non-disclosure", "nda", "confidentiality agreement"], "NDA"),
+    (["non-disclosure", "nda", "confidentiality agreement", "mutual confidentiality"], "NDA"),
     (["employment agreement", "offer letter", "employment contract"], "Employment Agreement"),
-    (["service level agreement", "service level"], "Service Level Agreement"),
-    (["master service", "master services", "master agreement"], "Master Services Agreement"),
-    (["software license", "saas", "subscription agreement"], "SaaS/License Agreement"),
+    (["service level agreement", "sla"], "Service Level Agreement"),
+    (["master services agreement", "master service agreement", "msa"], "Master Services Agreement"),
+    (["software license", "license agreement", "saas", "subscription agreement"], "SaaS/License Agreement"),
     (["partnership agreement", "joint venture"], "Partnership Agreement"),
-    (["vendor agreement", "supplier agreement", "procurement agreement"], "Vendor Agreement"),
-    (["consulting agreement", "consulting services"], "Consulting Agreement"),
+    (["vendor agreement", "supplier agreement", "procurement agreement", "purchase agreement"], "Vendor Agreement"),
+    (["consulting agreement", "consulting services agreement"], "Consulting Agreement"),
+    (["testing agreement", "test agreement", "testing services agreement"], "Testing Services Agreement"),
+    (["lease agreement", "rental agreement"], "Lease Agreement"),
     (["non-compete", "non-solicitation"], "Non-Compete Agreement"),
 ]
 
+# A document's type is decided by its title, not by words that appear somewhere
+# in the body (almost every contract has a confidentiality section, which made
+# the old full-text substring match label most contracts as NDAs).
+_TITLE_REGION_CHARS = 1500
+_HEADING_RE = re.compile(
+    r"^\s*([A-Z][A-Za-z&/\-\s]{2,80}?\b(?:AGREEMENT|Agreement|CONTRACT|Contract))\s*$",
+    re.MULTILINE,
+)
+
+
+def _matches(keywords: list[str], text: str) -> bool:
+    return any(re.search(rf"\b{re.escape(k)}\b", text) for k in keywords)
+
 
 def _detect_type(text: str, filename: str) -> str:
-    combined = f"{text} {filename}".lower()
+    name = re.sub(r"[_\-.]+", " ", filename).lower()
+    head = text[:_TITLE_REGION_CHARS]
+    title_region = f"{name}\n{head.lower()}"
+
+    # 1) Known type named in the filename or title area
     for keywords, label in _TYPE_PATTERNS:
-        if any(k in combined for k in keywords):
+        if _matches(keywords, title_region):
             return label
+
+    # 2) The document's own heading, e.g. "TESTING SERVICES AGREEMENT"
+    m = _HEADING_RE.search(head)
+    if m:
+        heading = " ".join(m.group(1).split())
+        if 2 <= len(heading.split()) <= 8:
+            return heading.title()
+
     return "Commercial Agreement"
 
 

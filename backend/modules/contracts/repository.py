@@ -4,7 +4,7 @@ from sqlalchemy import select, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import gen_uuid
-from modules.contracts.models import Contract
+from modules.contracts.models import Contract, ContractFile
 from core.constants import ContractStatus
 
 
@@ -95,7 +95,7 @@ class ContractRepository:
         from modules.obligations.models import Obligation
         from modules.alerts.models import Alert
 
-        for model in (Analysis, Obligation, Alert):
+        for model in (Analysis, Obligation, Alert, ContractFile):
             await self.db.execute(delete(model).where(model.contract_id == contract_id))
         await self.db.execute(delete(Contract).where(Contract.id == contract_id))
         await self.db.flush()

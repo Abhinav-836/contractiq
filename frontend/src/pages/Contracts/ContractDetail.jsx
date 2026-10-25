@@ -320,9 +320,16 @@ export default function ContractDetail() {
         <Card style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>Analysis Failed</h3>
-          <p style={{ color: '#64748B', fontSize: 14, marginBottom: 20, maxWidth: 460, marginLeft: 'auto', marginRight: 'auto' }}>
-            We couldn't extract readable text or the analysis was interrupted. Scanned/image-only
-            PDFs aren't supported yet — use a text-based PDF, DOCX or TXT.
+          <p
+            style={{
+              color: '#64748B',
+              fontSize: 14,
+              marginBottom: 20,
+              maxWidth: 460,
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}
+          >
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button onClick={handleRetry} disabled={isRetrying}>

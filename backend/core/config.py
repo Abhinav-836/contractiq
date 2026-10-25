@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Storage
     UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE_MB: int = 50
+    MAX_FILE_SIZE_MB: int = 20
 
     # LLM - Ollama Cloud Primary with GPT-OSS 20B
     LLM_PROVIDER: str = "ollama"

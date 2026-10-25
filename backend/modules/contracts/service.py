@@ -2,24 +2,39 @@
 import os
 import logging
 import traceback
+from typing import Optional
 
 import aiofiles
 from fastapi import UploadFile, HTTPException, BackgroundTasks
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.constants import ALLOWED_FILE_EXTENSIONS
 from db.session import AsyncSessionLocal
-from modules.contracts.models import Contract
+from modules.contracts.models import Contract, ContractFile
 from modules.contracts.repository import ContractRepository
 from modules.analysis.repository import AnalysisRepository
 from modules.analysis.orchestrator import orchestrate_analysis
-from ingestion.parser import extract_text_from_file, ExtractionError
+from ingestion.parser import extract_text, ExtractionError
 
 logger = logging.getLogger(__name__)
 
 MIN_TEXT_CHARS = 100
+DB_STORAGE_MARKER = "db"  # value of contracts.file_path for files kept in contract_files
+
+
+async def load_file_bytes(db: AsyncSession, contract_id: str, file_path: Optional[str]) -> Optional[bytes]:
+    """Original upload: from Postgres, or from disk for contracts uploaded before the move."""
+    data = (
+        await db.execute(select(ContractFile.data).where(ContractFile.contract_id == contract_id))
+    ).scalar_one_or_none()
+    if data is not None:
+        return bytes(data)
+    if file_path and file_path != DB_STORAGE_MARKER and os.path.exists(file_path):
+        async with aiofiles.open(file_path, "rb") as f:
+            return await f.read()
+    return None
 
 
 class ContractService:
@@ -36,8 +51,7 @@ class ContractService:
     async def get_owned(self, contract_id: str, user_id: str) -> Contract:
         """
         Fetch a contract the caller owns. Returns 404 (not 403) for other users'
-        contracts so ids can't be probed. Contracts with user_id=NULL are no
-        longer treated as public.
+        contracts so ids can't be probed.
         """
         contract = await self.repo.get_by_id(contract_id)
         if not contract or contract.user_id != user_id:
@@ -68,23 +82,14 @@ class ContractService:
             filename=filename,
             file_type=ext,
             file_size=len(content),
-            file_path="",
+            file_path=DB_STORAGE_MARKER,
             user_id=user_id,
         )
-
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        file_path = os.path.join(settings.UPLOAD_DIR, f"{contract.id}{ext}")
-        try:
-            async with aiofiles.open(file_path, "wb") as f:
-                await f.write(content)
-        except Exception as e:
-            logger.error(f"contracts.file_write_failed error={e}")
-            raise HTTPException(500, "Could not store the uploaded file")
-
-        await self.repo.update_file_path(contract.id, file_path)
+        # Store the bytes in Postgres — Render's disk is wiped on every deploy/restart
+        self.db.add(ContractFile(contract_id=contract.id, data=content))
         await self.db.commit()
 
-        background_tasks.add_task(_run_analysis_task, contract.id, file_path, ext, filename)
+        background_tasks.add_task(_run_analysis_task, contract.id, ext, filename)
 
         return {
             "id": contract.id,
@@ -96,23 +101,21 @@ class ContractService:
     async def reanalyze(self, contract: Contract, background_tasks: BackgroundTasks):
         if contract.status == "processing":
             raise HTTPException(409, "Analysis is already running for this contract")
-        if not contract.file_path or not os.path.exists(contract.file_path):
-            # Render's disk is ephemeral — the file is gone after a redeploy/restart
+        if await load_file_bytes(self.db, contract.id, contract.file_path) is None:
+            # Only possible for contracts uploaded before files were stored in the DB
             raise HTTPException(
                 410, "The original file is no longer on the server. Please upload the contract again."
             )
         await self.repo.update_status(contract.id, "processing")
         await self.db.commit()
-        background_tasks.add_task(
-            _run_analysis_task, contract.id, contract.file_path, contract.file_type, contract.filename
-        )
+        background_tasks.add_task(_run_analysis_task, contract.id, contract.file_type, contract.filename)
         return {"message": "Analysis triggered", "contract_id": contract.id, "status": "processing"}
 
     async def delete(self, contract: Contract):
         file_path = contract.file_path
         await self.repo.delete_with_children(contract.id)
         await self.db.commit()
-        if file_path and os.path.exists(file_path):
+        if file_path and file_path != DB_STORAGE_MARKER and os.path.exists(file_path):
             try:
                 os.remove(file_path)
             except OSError as e:
@@ -124,24 +127,33 @@ class ContractService:
 # Background task — creates its OWN session
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _run_analysis_task(contract_id: str, file_path: str, file_type: str, filename: str) -> None:
+async def _run_analysis_task(contract_id: str, file_type: str, filename: str) -> None:
     logger.info(f"analysis_task.start contract_id={contract_id} file={filename}")
 
     async with AsyncSessionLocal() as db:
         repo = ContractRepository(db)
         try:
+            contract = await repo.get_by_id(contract_id)
+            if not contract:
+                logger.warning(f"analysis_task.contract_gone contract_id={contract_id}")
+                return
+
             await repo.update_status(contract_id, "processing")
             await db.commit()
 
-            try:
-                text = await extract_text_from_file(file_path, file_type)
-            except ExtractionError as e:
-                logger.warning(f"analysis_task.extract_failed contract_id={contract_id} error={e}")
-                text = ""
+            data = await load_file_bytes(db, contract_id, contract.file_path)
+            text = ""
+            if data is None:
+                logger.warning(f"analysis_task.file_missing contract_id={contract_id}")
+            else:
+                try:
+                    text = await extract_text(data, file_type)
+                except ExtractionError as e:
+                    logger.warning(f"analysis_task.extract_failed contract_id={contract_id} error={e}")
 
             if len(text) < MIN_TEXT_CHARS:
-                # Scanned/image-only PDFs land here. Don't invent an analysis of a
-                # placeholder string — mark it failed so the UI can tell the user.
+                # Don't invent an analysis of a placeholder string — mark it failed
+                # so the UI can tell the user.
                 logger.warning(f"analysis_task.no_text contract_id={contract_id} chars={len(text)}")
                 await repo.update_status(contract_id, "failed", extracted_text=text or None)
                 await db.commit()
@@ -181,9 +193,8 @@ async def _run_analysis_task(contract_id: str, file_path: str, file_type: str, f
         except Exception as e:
             logger.error(f"analysis_task.failed contract_id={contract_id} error={e}")
             traceback.print_exc()
-            # The session is in a failed transaction state — it MUST be rolled
-            # back before it can be used again, otherwise the status update below
-            # raises PendingRollbackError and the contract stays "processing" forever.
+            # The session is in a failed transaction state — roll back before reuse,
+            # otherwise the status update raises and the contract stays "processing".
             try:
                 await db.rollback()
                 await repo.update_status(contract_id, "failed")

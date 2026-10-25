@@ -28,7 +28,7 @@ export default function UploadContract() {
     if (ext === '.doc') return toast.error('Legacy .doc files aren\'t supported — save as .docx or PDF')
     if (!validTypes.includes(ext)) return toast.error('Invalid file type. Use PDF, DOCX, or TXT')
     if (f.size === 0) return toast.error('File is empty')
-    if (f.size > 50 * 1024 * 1024) return toast.error('File too large. Max 50MB')
+    if (f.size > 20 * 1024 * 1024) return toast.error('File too large. Max 20MB')
     setFile(f)
   }
 
@@ -112,8 +112,8 @@ export default function UploadContract() {
               </>
             ) : (
               <>
-                <p style={{ color: '#E2E8F0', fontWeight: 500, marginBottom: 8 }}>Drop your contract here or click to browse</p>
-                <p style={{ color: '#64748B', fontSize: 13 }}>PDF, DOCX, TXT (max 50MB)</p>
+                <p style={{ color: '#E2E8F0', fontWeight: 500, marginBottom: 8 }}>Upload a contract for AI-powered analysis. PDF (including scanned), DOCX or TXT up to 20MB.</p>
+                <p style={{ color: '#64748B', fontSize: 13 }}>PDF, DOCX, TXT (max 20MB)</p>
               </>
             )}
           </div>

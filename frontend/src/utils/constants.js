@@ -45,7 +45,7 @@ export const SUPPORTED_FILE_TYPES = {
   'text/plain': ['.txt'],
 }
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+export const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
 export const QUERY_KEYS = {
   CONTRACTS: 'contracts',
