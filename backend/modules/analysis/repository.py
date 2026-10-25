@@ -49,7 +49,20 @@ class AnalysisRepository:
         for field in ("clauses", "recommendations", "parties", "key_dates"):
             raw = getattr(analysis, field)
             try:
-                d[field] = json.loads(raw) if raw else []
+                value = json.loads(raw) if raw else []
             except Exception:
-                d[field] = []
+                value = []
+            if not isinstance(value, list):
+                value = []
+            if field in ("clauses", "key_dates"):
+                value = [v for v in value if isinstance(v, dict)]
+                for v in value:  # coerce None/non-str values so the schema accepts them
+                    for k, val in list(v.items()):
+                        if val is None:
+                            v[k] = None if k == "recommendation" else ""
+                        elif not isinstance(val, str):
+                            v[k] = str(val)
+            else:
+                value = [str(v) for v in value if v is not None]
+            d[field] = value
         return d

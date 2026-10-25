@@ -5,7 +5,7 @@ import { useObligations } from '../../hooks/useObligations'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
-import { formatDate } from '../../utils/formatters'
+import { formatDueDate, dueDateSortKey } from '../../utils/formatters'
 
 export default function ObligationsPage() {
   const navigate = useNavigate()
@@ -22,8 +22,9 @@ export default function ObligationsPage() {
 
   const filtered = obligations
     .filter((o) => filter === 'all' || o.status === filter)
+    .slice() // don't mutate the react-query cache array
     .sort((a, b) => {
-      if (sortBy === 'dueDate') return new Date(a.dueDate || 0) - new Date(b.dueDate || 0)
+      if (sortBy === 'dueDate') return dueDateSortKey(a.dueDate) - dueDateSortKey(b.dueDate)
       if (sortBy === 'priority') {
         const w = { high: 3, medium: 2, low: 1 }
         return (w[b.priority] || 0) - (w[a.priority] || 0)
@@ -112,13 +113,13 @@ export default function ObligationsPage() {
                     </div>
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: '#E2E8F0', marginBottom: 4 }}>{o.title}</h3>
                     <p style={{ fontSize: 13, color: '#94A3B8', marginBottom: 8 }}>{o.description || 'No description'}</p>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748B' }}>
+                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748B', flexWrap: 'wrap' }}>
                       {o.assignedTo && <span>👤 {o.assignedTo}</span>}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginLeft: 16 }}>
                     <div style={{ fontSize: 13, color: o.status === 'overdue' ? '#EF4444' : '#94A3B8', fontWeight: o.status === 'overdue' ? 600 : 400 }}>
-                      Due {formatDate(o.dueDate)}
+                      {o.dueDate ? `Due: ${formatDueDate(o.dueDate)}` : 'No due date'}
                     </div>
                   </div>
                 </div>

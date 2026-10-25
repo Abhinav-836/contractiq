@@ -5,6 +5,7 @@ import { useUploadContract } from '../../hooks/useContracts'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '../../utils/helpers'
 
 export default function UploadContract() {
   const navigate = useNavigate()
@@ -22,9 +23,11 @@ export default function UploadContract() {
   }
 
   const validateAndSet = (f) => {
-    const validTypes = ['.pdf', '.doc', '.docx', '.txt']
-    const ext = '.' + f.name.split('.').pop().toLowerCase()
-    if (!validTypes.includes(ext)) return toast.error('Invalid file type. Use PDF, DOC, DOCX, or TXT')
+    const validTypes = ['.pdf', '.docx', '.txt']
+    const ext = f.name.includes('.') ? '.' + f.name.split('.').pop().toLowerCase() : ''
+    if (ext === '.doc') return toast.error('Legacy .doc files aren\'t supported — save as .docx or PDF')
+    if (!validTypes.includes(ext)) return toast.error('Invalid file type. Use PDF, DOCX, or TXT')
+    if (f.size === 0) return toast.error('File is empty')
     if (f.size > 50 * 1024 * 1024) return toast.error('File too large. Max 50MB')
     setFile(f)
   }
@@ -40,6 +43,7 @@ export default function UploadContract() {
   const handleUpload = async () => {
     if (!file) return
     try {
+      setProgress(0)
       const result = await uploadMutation.mutateAsync({
         file,
         onProgress: setProgress,
@@ -47,7 +51,7 @@ export default function UploadContract() {
       toast.success('Contract uploaded! Analysis started.')
       navigate(`/contracts/${result.id}`)
     } catch (error) {
-      toast.error(error.response?.data?.detail || error.message || 'Upload failed')
+      toast.error(getErrorMessage(error, 'Upload failed'))
     }
   }
 
@@ -67,7 +71,7 @@ export default function UploadContract() {
           Upload Contract
         </h1>
         <p style={{ color: '#64748B', fontSize: 14, marginBottom: 32 }}>
-          Upload a contract for AI-powered analysis. PDF, DOC, DOCX, TXT up to 50MB.
+          Upload a contract for AI-powered analysis. Text-based PDF, DOCX or TXT up to 50MB.
         </p>
 
         <Card>
@@ -92,8 +96,11 @@ export default function UploadContract() {
             <input
               ref={inputRef}
               type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              onChange={(e) => e.target.files[0] && validateAndSet(e.target.files[0])}
+              accept=".pdf,.docx,.txt"
+              onChange={(e) => {
+                if (e.target.files[0]) validateAndSet(e.target.files[0])
+                e.target.value = '' // allow re-selecting the same file after an error
+              }}
               style={{ display: 'none' }}
               disabled={isUploading}
             />
@@ -106,7 +113,7 @@ export default function UploadContract() {
             ) : (
               <>
                 <p style={{ color: '#E2E8F0', fontWeight: 500, marginBottom: 8 }}>Drop your contract here or click to browse</p>
-                <p style={{ color: '#64748B', fontSize: 13 }}>PDF, DOC, DOCX, TXT (max 50MB)</p>
+                <p style={{ color: '#64748B', fontSize: 13 }}>PDF, DOCX, TXT (max 50MB)</p>
               </>
             )}
           </div>

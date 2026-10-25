@@ -41,12 +41,17 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 10080
 
+    # Create test@example.com / test1234 on an empty DB (local dev only)
+    SEED_DEV_USER: bool = False
+
     # Redis (optional)
     REDIS_URL: str = "redis://localhost:6379/0"
 
     @property
     def allowed_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        # A trailing slash ("https://app.vercel.app/") never matches the browser's
+        # Origin header and silently breaks CORS — normalize it away.
+        return [o.strip().rstrip("/") for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property
     def max_file_size_bytes(self) -> int:

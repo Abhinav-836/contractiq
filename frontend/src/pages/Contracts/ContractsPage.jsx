@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getContracts, deleteContract } from '../../services/contractService'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '../../utils/helpers'
 
 const sC = { processing: '#8B5CF6', completed: '#10B981', failed: '#EF4444' }
 const rC = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' }
@@ -16,9 +17,10 @@ export default function ContractsPage() {
   const [contractToDelete, setContractToDelete] = useState(null)
 
   const { data: contracts = [], isLoading, error } = useQuery({
-    queryKey: ['contracts'],
-    queryFn: () => getContracts(),
-    refetchInterval: 5000,
+    queryKey: ['contracts', 'all'],
+    queryFn: () => getContracts({ limit: 100 }),
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => c.status === 'processing') ? 5000 : false,
   })
 
   const deleteMutation = useMutation({
@@ -41,6 +43,12 @@ export default function ContractsPage() {
       (!search || name.toLowerCase().includes(search.toLowerCase()))
     )
   })
+
+  for (const key of ['contracts', 'contractStats', 'obligations', 'obligationStats', 'alerts', 'alertStats']) {
+        qc.invalidateQueries({ queryKey: [key] })
+  }
+
+  toast.error(getErrorMessage(err, 'Failed to delete contract'))
 
   const statuses = [...new Set(contracts.map((c) => c.status).filter(Boolean))]
 

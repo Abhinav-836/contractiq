@@ -1,6 +1,4 @@
 # modules/analysis/orchestrator.py
-import traceback
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai.agents.graph import run_analysis_graph
@@ -20,45 +18,28 @@ async def orchestrate_analysis(
     """
     Runs the multi-agent analysis graph, then persists obligations and alerts.
     Reuses the caller's DB session — does NOT open its own.
+    Errors propagate so the caller marks the contract as failed.
     """
     logger.info(f"orchestrator.start contract_id={contract_id}")
 
-    try:
-        result = await run_analysis_graph(
-            text=text,
-            filename=filename,
-            contract_id=contract_id,
-        )
+    result = await run_analysis_graph(
+        text=text,
+        filename=filename,
+        contract_id=contract_id,
+    )
 
-        logger.info(
-            f"orchestrator.graph_done provider={result.get('llm_provider')} "
-            f"risk={result.get('risk_level')} score={result.get('risk_score')}"
-        )
+    logger.info(
+        f"orchestrator.graph_done provider={result.get('llm_provider')} "
+        f"risk={result.get('risk_level')} score={result.get('risk_score')}"
+    )
 
-        obligations = result.get("obligations_extracted", [])
-        if obligations:
-            created = await _create_obligations(db, contract_id, obligations)
-            logger.info(f"orchestrator.obligations_created count={created}")
+    obligations = result.get("obligations_extracted", [])
+    if obligations:
+        created = await _create_obligations(db, contract_id, obligations)
+        logger.info(f"orchestrator.obligations_created count={created}")
 
-        await _create_alerts_from_analysis(db, contract_id, result)
-
-        return result
-
-    except Exception as e:
-        logger.error(f"orchestrator.failed contract_id={contract_id} error={e}")
-        traceback.print_exc()
-        return {
-            "contract_id": contract_id,
-            "executive_summary": "Analysis encountered an error.",
-            "summary": f"Error: {str(e)[:200]}",
-            "risk_score": 50,
-            "risk_level": "medium",
-            "llm_provider": "error",
-            "llm_model": "none",
-            "clauses": [],
-            "recommendations": ["Please re-upload or try again later."],
-            "obligations_extracted": [],
-        }
+    await _create_alerts_from_analysis(db, contract_id, result)
+    return result
 
 
 async def _create_obligations(db: AsyncSession, contract_id: str, obligations: list) -> int:

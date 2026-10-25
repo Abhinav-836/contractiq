@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Optional, List
 
 from sqlalchemy import select, update, delete, func
@@ -20,7 +19,6 @@ class AlertRepository:
             title=title,
             message=message,
             read=False,
-            created_at=datetime.utcnow(),
         )
         self.db.add(alert)
         await self.db.flush()

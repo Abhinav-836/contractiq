@@ -1,44 +1,35 @@
-from pydantic import BaseModel
-from typing import Optional, List, Any
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 from datetime import datetime
 
 
+# Fields default to "" so analyses saved before normalization (or with a sparse
+# LLM response) still serialize instead of failing validation with a 500.
 class ClauseOut(BaseModel):
-    clause_type: str
-    risk_level: str
-    clause_text: str
-    explanation: str
+    clause_type: str = "Clause"
+    risk_level: str = "medium"
+    clause_text: str = ""
+    explanation: str = ""
     recommendation: Optional[str] = None
 
 
 class KeyDateOut(BaseModel):
-    label: str
-    date: str
+    label: str = "Date"
+    date: str = ""
 
 
-class AnalysisBase(BaseModel):
+class AnalysisOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
     contract_id: str
     executive_summary: Optional[str] = None
     summary: Optional[str] = None
     risk_score: Optional[float] = None
     risk_level: Optional[str] = None
     llm_provider: Optional[str] = None
-
-
-class AnalysisCreate(AnalysisBase):
-    clauses: Optional[List[dict]] = None
-    recommendations: Optional[List[str]] = None
-    parties: Optional[List[str]] = None
-    key_dates: Optional[List[dict]] = None
-
-
-class AnalysisOut(AnalysisBase):
-    id: str
     clauses: List[ClauseOut] = []
     recommendations: List[str] = []
     parties: List[str] = []
     key_dates: List[KeyDateOut] = []
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    created_at: Optional[datetime] = None

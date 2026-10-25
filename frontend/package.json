@@ -11,9 +11,6 @@
     "zustand": "^4.4.7",
     "framer-motion": "^10.16.16",
     "react-hot-toast": "^2.4.1",
-    "three": "^0.160.0",
-    "@react-three/fiber": "^8.15.12",
-    "@react-three/drei": "^9.92.7",
     "date-fns": "^3.0.6",
     "clsx": "^2.0.0"
   },

@@ -6,7 +6,7 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
-import { formatDate } from '../../utils/formatters'
+import { formatDate, formatDueDate } from '../../utils/formatters'
 import toast from 'react-hot-toast'
 
 export default function ObligationDetail() {
@@ -72,7 +72,7 @@ export default function ObligationDetail() {
             <div>
               <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Due Date</div>
               <div style={{ fontSize: 16, fontWeight: 600, color: obligation.status === 'overdue' ? '#EF4444' : '#E2E8F0' }}>
-                {formatDate(obligation.dueDate)}
+                {formatDueDate(obligation.dueDate)}
               </div>
             </div>
             <div>
@@ -84,6 +84,14 @@ export default function ObligationDetail() {
               <div style={{ fontSize: 16, fontWeight: 600, color: '#E2E8F0' }}>{formatDate(obligation.createdAt)}</div>
             </div>
           </div>
+
+          {obligation.contractId && (
+            <div style={{ marginBottom: 16 }}>
+              <Button variant="outline" size="small" onClick={() => navigate(`/contracts/${obligation.contractId}`)}>
+                📄 View source contract
+              </Button>
+            </div>
+          )}
 
           {obligation.status !== 'completed' && (
             <Button onClick={handleComplete} disabled={isCompleting} fullWidth size="large">

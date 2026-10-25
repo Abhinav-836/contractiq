@@ -2,6 +2,15 @@ import { clsx } from 'clsx'
 
 export const cn = (...inputs) => clsx(inputs)
 
+// Normalizes FastAPI errors (string detail, 422 array detail, network failure)
+export const getErrorMessage = (error, fallback = 'Something went wrong') => {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg
+  if (error && !error.response) return 'Server is unreachable or waking up — please try again'
+  return fallback
+}
+
 export const sleep = (ms) => new Promise((res) => setTimeout(res, ms))
 
 export const generateId = () => Math.random().toString(36).substr(2, 9)

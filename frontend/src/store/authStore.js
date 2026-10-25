@@ -2,6 +2,17 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { api } from '../lib/axios'
 import toast from 'react-hot-toast'
+import { queryClient } from '../lib/queryClient'
+
+// FastAPI 422 errors return `detail` as an array of objects — passing that to
+// toast() renders "[object Object]". Also covers Render cold-start timeouts.
+const errorMessage = (error, fallback) => {
+  const detail = error.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg.replace(/^Value error, /, '')
+  if (!error.response) return 'Server is waking up or unreachable — please try again in a few seconds'
+  return fallback
+}
 
 export const useAuthStore = create(
   persist(
@@ -20,6 +31,8 @@ export const useAuthStore = create(
           const { data } = await api.post('/api/v1/auth/login', { email, password })
           const { access_token, user } = data
           sessionStorage.setItem('ciq_token', access_token)
+          // Drop any cached data from a previous account in this tab
+          queryClient.clear()
           set({
             user,
             token: access_token,
@@ -30,7 +43,7 @@ export const useAuthStore = create(
           return { success: true }
         } catch (error) {
           set({ isLoading: false })
-          const message = error.response?.data?.detail || 'Login failed'
+          const message = errorMessage(error, 'Login failed')
           toast.error(message)
           return { success: false, error: message }
         }
@@ -42,6 +55,7 @@ export const useAuthStore = create(
           const { data } = await api.post('/api/v1/auth/register', userData)
           const { access_token, user } = data
           sessionStorage.setItem('ciq_token', access_token)
+          queryClient.clear()
           set({
             user,
             token: access_token,
@@ -52,7 +66,7 @@ export const useAuthStore = create(
           return { success: true }
         } catch (error) {
           set({ isLoading: false })
-          const message = error.response?.data?.detail || 'Registration failed'
+          const message = errorMessage(error, 'Registration failed')
           toast.error(message)
           return { success: false, error: message }
         }
@@ -60,6 +74,9 @@ export const useAuthStore = create(
 
       logout: () => {
         sessionStorage.removeItem('ciq_token')
+        // Without this, the next user to sign in on this tab briefly sees the
+        // previous user's contracts/alerts from the 5-minute query cache.
+        queryClient.clear()
         set({ user: null, token: null, isAuthenticated: false })
         toast.success('Logged out')
       },

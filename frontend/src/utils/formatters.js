@@ -16,6 +16,34 @@ export const formatRelativeTime = (date) => {
   } catch { return '—' }
 }
 
+// Obligation due dates come from contract text and are usually relative
+// ("Within 30 days"), not ISO dates. parseISO() fails on those and formatDate
+// returned "—", so every obligation showed "Due —".
+export const formatDueDate = (value) => {
+  if (!value) return 'No due date'
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const d = parseISO(value)
+    if (!isNaN(d)) return format(d, 'MMM d, yyyy')
+  }
+  return value
+}
+
+// Sort key in days: absolute dates by distance from now, "Within N units" by N,
+// anything unparseable last.
+export const dueDateSortKey = (value) => {
+  if (!value) return Number.POSITIVE_INFINITY
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const d = parseISO(value)
+    if (!isNaN(d)) return (d.getTime() - Date.now()) / 86400000
+  }
+  const m = /(\d+)\s*(day|week|month|year)/i.exec(value)
+  if (m) {
+    const mult = { day: 1, week: 7, month: 30, year: 365 }[m[2].toLowerCase()]
+    return Number(m[1]) * mult
+  }
+  return Number.MAX_SAFE_INTEGER
+}
+
 export const formatCurrency = (amount, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount ?? 0)
 
@@ -35,7 +63,7 @@ export const formatRiskScore = (score) => {
 
 export const truncate = (str, maxLength = 80) =>
   str?.length > maxLength ? `${str.slice(0, maxLength)}...` : str ?? ''
-// Add to existing file
+
 export const formatObligationStatus = (status) => {
   const map = {
     pending: 'Pending',
@@ -57,12 +85,12 @@ export const formatPriority = (priority) => {
 
 export const formatTimeRemaining = (dueDate) => {
   if (!dueDate) return 'No due date'
-  
+
   const now = new Date()
   const due = new Date(dueDate)
   const diff = due - now
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  
+
   if (days < 0) return `${Math.abs(days)} days overdue`
   if (days === 0) return 'Due today'
   if (days === 1) return 'Due tomorrow'

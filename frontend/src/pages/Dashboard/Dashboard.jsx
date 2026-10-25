@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { getContracts } from '../../services/contractService'
+import { getContracts, getContractStats } from '../../services/contractService'
 import { getObligationStats } from '../../services/obligationService'
 import { getAlertStats } from '../../services/alertService'
 import Card from '../../components/ui/Card'
@@ -15,9 +15,20 @@ const statusColors = { completed: '#10B981', processing: '#8B5CF6', failed: '#EF
 export default function Dashboard() {
   const navigate = useNavigate()
 
+  // Separate key from the full list: sharing ['contracts'] with ContractsPage meant
+  // whichever page loaded first decided what the other showed (5 rows vs all).
   const { data: contracts = [], isLoading: contractsLoading } = useQuery({
-    queryKey: ['contracts'],
+    queryKey: ['contracts', 'recent'],
     queryFn: () => getContracts({ limit: 5 }),
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => c.status === 'processing') ? 4000 : false,
+  })
+
+  // "Total Contracts" used contracts.length of a limit-5 query, so it never showed more than 5
+  const { data: contractStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['contractStats'],
+    queryFn: getContractStats,
+    refetchInterval: 30000,
   })
 
   const { data: obligationStats, isLoading: obligationsLoading } = useQuery({
@@ -33,7 +44,7 @@ export default function Dashboard() {
   })
 
   const stats = [
-    { label: 'Total Contracts', value: contracts.length, icon: '📄', color: '#00D4AA', loading: contractsLoading },
+    { label: 'Total Contracts', value: contractStats?.total_contracts ?? 0, icon: '📄', color: '#00D4AA', loading: statsLoading },
     { label: 'Pending Obligations', value: obligationStats?.pending || 0, icon: '✅', color: '#F59E0B', loading: obligationsLoading },
     { label: 'Overdue Tasks', value: obligationStats?.overdue || 0, icon: '⚠️', color: '#EF4444', loading: obligationsLoading },
     { label: 'Unread Alerts', value: alertStats?.unread || 0, icon: '🔔', color: '#8B5CF6', loading: alertsLoading },
@@ -97,7 +108,7 @@ export default function Dashboard() {
           </Card>
         ) : (
           <Card>
-            {contracts.slice(0, 5).map((contract, index) => (
+            {contracts.map((contract, index) => (
               <div
                 key={contract.id}
                 onClick={() => navigate(`/contracts/${contract.id}`)}
@@ -106,7 +117,7 @@ export default function Dashboard() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '16px 0',
-                  borderBottom: index < Math.min(contracts.length, 5) - 1 ? '1px solid #1E2D3D' : 'none',
+                  borderBottom: index < contracts.length - 1 ? '1px solid #1E2D3D' : 'none',
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#131B2A')}
@@ -120,7 +131,7 @@ export default function Dashboard() {
                     <div style={{ fontWeight: 500, color: '#E2E8F0', marginBottom: 4 }}>{contract.filename}</div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: statusColors[contract.status] || '#64748B', background: `${statusColors[contract.status] || '#64748B'}18`, padding: '2px 8px', borderRadius: 99, textTransform: 'capitalize' }}>
-                        {contract.status}
+                        {contract.status === 'processing' ? 'Analyzing' : contract.status}
                       </span>
                       {contract.risk_level && <span style={{ fontSize: 11, color: riskColors[contract.risk_level], fontWeight: 600 }}>{contract.risk_level} risk</span>}
                       <span style={{ fontSize: 11, color: '#475569' }}>{formatRelativeTime(contract.created_at)}</span>

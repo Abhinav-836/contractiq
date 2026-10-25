@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { getContract, getContractAnalysis, deleteContract } from '../../services/contractService'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getContract, getContractAnalysis, deleteContract, reanalyzeContract } from '../../services/contractService'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
@@ -9,17 +9,20 @@ import Badge from '../../components/ui/Badge'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { formatDate } from '../../utils/formatters'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '../../utils/helpers'
 
 const statusText = { processing: 'Analyzing', completed: 'Completed', failed: 'Failed' }
 
 export default function ContractDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
+  const [isRetrying, setIsRetrying] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const { data: contract, isLoading: contractLoading } = useQuery({
+  const { data: contract, isLoading: contractLoading, error: contractError } = useQuery({
     queryKey: ['contract', id],
     queryFn: () => getContract(id),
     enabled: !!id,
@@ -33,17 +36,51 @@ export default function ContractDetail() {
     enabled: !!id && contract?.status === 'completed',
   })
 
+  // When analysis finishes, new obligations/alerts exist — refresh those views
+  const prevStatus = useRef(contract?.status)
+  useEffect(() => {
+    if (prevStatus.current === 'processing' && contract?.status && contract.status !== 'processing') {
+      invalidateLists()
+    }
+    prevStatus.current = contract?.status
+  }, [contract?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const isLoading = contractLoading || (contract?.status === 'completed' && analysisLoading)
   const isProcessing = contract?.status === 'processing'
+
+  const invalidateLists = () => {
+    // every list/stat view that could still show this contract (all have 5-min staleTime)
+    for (const key of ['contracts', 'contractStats', 'obligations', 'obligationStats', 'alerts', 'alertStats']) {
+      qc.invalidateQueries({ queryKey: [key] })
+    }
+  }
+
+  const handleRetry = async () => {
+    setIsRetrying(true)
+    try {
+      await reanalyzeContract(id)
+      qc.removeQueries({ queryKey: ['analysis', id] })
+      await qc.invalidateQueries({ queryKey: ['contract', id] })
+      invalidateLists()
+      toast.success('Analysis restarted')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not restart analysis'))
+    } finally {
+      setIsRetrying(false)
+    }
+  }
 
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
       await deleteContract(id)
+      qc.removeQueries({ queryKey: ['contract', id] })
+      qc.removeQueries({ queryKey: ['analysis', id] })
+      invalidateLists()
       toast.success('Contract deleted')
       navigate('/contracts')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete contract')
+      toast.error(getErrorMessage(err, 'Failed to delete contract'))
       setIsDeleting(false)
       setShowDeleteConfirm(false)
     }
@@ -53,6 +90,16 @@ export default function ContractDetail() {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
         <Spinner size="large" />
+      </div>
+    )
+  }
+
+  if (!contract && contractError?.response?.status !== 404 && contractError) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60 }}>
+        <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>Couldn't load this contract</h3>
+        <p style={{ color: '#64748B', fontSize: 14, marginBottom: 20 }}>{getErrorMessage(contractError)}</p>
+        <Button onClick={() => qc.invalidateQueries({ queryKey: ['contract', id] })}>Try again</Button>
       </div>
     )
   }
@@ -273,14 +320,19 @@ export default function ContractDetail() {
         <Card style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>Analysis Failed</h3>
-          <p style={{ color: '#64748B', fontSize: 14, marginBottom: 20 }}>
-            Please try uploading the contract again.
+          <p style={{ color: '#64748B', fontSize: 14, marginBottom: 20, maxWidth: 460, marginLeft: 'auto', marginRight: 'auto' }}>
+            We couldn't extract readable text or the analysis was interrupted. Scanned/image-only
+            PDFs aren't supported yet — use a text-based PDF, DOCX or TXT.
           </p>
-          <Button onClick={() => navigate('/contracts/upload')}>Upload Again</Button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button onClick={handleRetry} disabled={isRetrying}>
+              {isRetrying ? 'Restarting...' : '↻ Retry Analysis'}
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/contracts/upload')}>Upload Again</Button>
+          </div>
         </Card>
       )}
 
-      {/* Delete confirmation dialog — MUST be inside the return, at the bottom */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         onClose={() => !isDeleting && setShowDeleteConfirm(false)}

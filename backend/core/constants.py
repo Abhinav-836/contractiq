@@ -1,8 +1,8 @@
 from enum import Enum
 
 # File upload constants
-ALLOWED_FILE_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+# .doc (legacy binary Word) is NOT supported: python-docx can only read .docx
+ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
 
 class ContractStatus(str, Enum):

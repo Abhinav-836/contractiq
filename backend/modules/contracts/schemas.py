@@ -1,31 +1,24 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 from datetime import datetime
 
 
-class ContractBase(BaseModel):
+class ContractListItem(BaseModel):
+    """Lightweight row for list views (no extracted text, no server file path)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
     filename: str
     file_type: str
     file_size: int
     status: str
     risk_level: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
-class ContractCreate(ContractBase):
-    file_path: str
-    user_id: Optional[str] = None
-
-
-class ContractOut(ContractBase):
-    id: str
-    file_path: str
+class ContractOut(ContractListItem):
     extracted_text: Optional[str] = None
-    user_id: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ContractStatsOut(BaseModel):
@@ -43,16 +36,3 @@ class ContractUploadResponse(BaseModel):
     filename: str
     status: str
     message: str
-
-
-class ContractListResponse(BaseModel):
-    contracts: List[ContractOut]
-    total: int
-    page: int
-    limit: int
-
-
-class ContractUpdateStatus(BaseModel):
-    status: str
-    risk_level: Optional[str] = None
-    extracted_text: Optional[str] = None

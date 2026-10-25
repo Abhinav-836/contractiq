@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 
 from ai.llm.base import BaseLLMClient
 from core.logger import get_logger
@@ -24,17 +25,23 @@ class MockLLMClient(BaseLLMClient):
 
     async def complete(self, system: str, user: str, json_mode: bool = True) -> str:
         logger.info("mock.complete called")
-        text = user.lower()
+        # Only look at the contract itself, not the prompt template wrapped around it
+        m = re.search(r"Contract text:\s*(.*)", user, re.DOTALL | re.IGNORECASE)
+        text = (m.group(1) if m else user).lower()
 
-        if any(w in text for w in ("non-disclosure", "nda", "confidential")):
+        def has(*words: str) -> bool:
+            # word boundaries: "nda" must not match "standard"/"calendar"/"agenda"
+            return any(re.search(rf"\b{re.escape(w)}\b", text) for w in words)
+
+        if has("non-disclosure", "nda", "confidentiality agreement"):
             ctype, risk = "Non-Disclosure Agreement", "low"
-        elif any(w in text for w in ("employment", "employee", "salary")):
+        elif has("employment", "employee", "salary"):
             ctype, risk = "Employment Agreement", "medium"
-        elif any(w in text for w in ("service level", "sla", "uptime")):
+        elif has("service level", "sla", "uptime"):
             ctype, risk = "Service Level Agreement", "medium"
-        elif any(w in text for w in ("enterprise", "license", "saas")):
+        elif has("enterprise", "license", "saas"):
             ctype, risk = "Enterprise License Agreement", "high"
-        elif any(w in text for w in ("master service", "msa")):
+        elif has("master service", "master services", "msa"):
             ctype, risk = "Master Services Agreement", "medium"
         else:
             ctype, risk = "Commercial Agreement", "medium"
@@ -53,7 +60,7 @@ class MockLLMClient(BaseLLMClient):
             "summary": f"The {ctype} is a {'standard' if risk == 'low' else 'complex'} document.",
             "risk_score": float(score),
             "risk_level": risk,
-            "parties": ["Party A (Client)", "Party B (Vendor/Provider)"],
+            "parties": [],  # filled from regex-detected parties by risk_agent
             "key_dates": [
                 {"label": "Effective Date", "date": "Upon execution"},
                 {"label": "Initial Term", "date": "12 months"},

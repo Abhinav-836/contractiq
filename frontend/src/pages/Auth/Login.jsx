@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../../store/authStore'
 import Button from '../../components/ui/Button'
@@ -10,7 +10,7 @@ import Spinner from '../../components/ui/Spinner'
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [errors, setErrors] = useState({})
-  const { login, isLoading } = useAuthStore()
+  const { login, isLoading, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
 
   const validateForm = () => {
@@ -28,6 +28,8 @@ export default function Login() {
     const result = await login(form.email, form.password)
     if (result.success) navigate('/dashboard')
   }
+
+    if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   return (
     <div

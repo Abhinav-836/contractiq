@@ -33,6 +33,11 @@ export const getContractAnalysis = async (contractId) => {
   }
 }
 
+export const reanalyzeContract = async (id) => {
+  const { data } = await api.post(`/api/v1/contracts/${id}/analyze`)
+  return data
+}
+
 export const deleteContract = async (id) => {
   const { data } = await api.delete(`/api/v1/contracts/${id}`)
   return data

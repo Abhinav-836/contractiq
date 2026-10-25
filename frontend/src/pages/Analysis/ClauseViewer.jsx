@@ -10,32 +10,52 @@ export default function ClauseViewer() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const { data: contract } = useQuery({
+  const { data: contract, isLoading: contractLoading } = useQuery({
     queryKey: ['contract', id],
     queryFn: () => getContract(id),
     enabled: !!id,
+    // Without polling this page sat on "Analysis in Progress" forever
+    refetchInterval: (query) => (query.state.data?.status === 'processing' ? 3000 : false),
   })
 
-  const { data: analysis, isLoading } = useQuery({
+  const { data: analysis, isLoading: analysisLoading } = useQuery({
     queryKey: ['analysis', id],
     queryFn: () => getContractAnalysis(id),
     enabled: !!id && contract?.status === 'completed',
   })
 
-  if (isLoading || !contract) {
+  if (contractLoading || (contract?.status === 'completed' && analysisLoading)) {
     return <div style={{ textAlign: 'center', padding: 60 }}><Spinner size="large" /></div>
   }
 
-  if (contract.status === 'processing' || !analysis) {
+  if (!contract) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60 }}>
+        <h3 style={{ color: '#E2E8F0', marginBottom: 16 }}>Contract not found</h3>
+        <Button onClick={() => navigate('/analysis')}>Back to Analysis</Button>
+      </div>
+    )
+  }
+
+  if (contract.status === 'processing') {
     return (
       <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center', padding: 60 }}>
         <Spinner size="large" />
-        <h3 style={{ color: '#E2E8F0', marginTop: 20 }}>
-          {contract.status === 'processing' ? 'Analysis in Progress' : 'No analysis available'}
+        <h3 style={{ color: '#E2E8F0', marginTop: 20 }}>Analysis in Progress</h3>
+        <p style={{ color: '#64748B', marginTop: 8 }}>This page updates automatically.</p>
+      </div>
+    )
+  }
+
+  if (!analysis) {
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center', padding: 60 }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>{contract.status === 'failed' ? '❌' : '📭'}</div>
+        <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>
+          {contract.status === 'failed' ? 'Analysis failed' : 'No analysis available'}
         </h3>
-        <p style={{ color: '#64748B', marginTop: 8 }}>
-          {contract.status === 'processing' ? 'Please wait while we analyze your contract.' : ''}
-        </p>
+        <p style={{ color: '#64748B', marginBottom: 20 }}>You can retry the analysis from the contract page.</p>
+        <Button onClick={() => navigate(`/contracts/${id}`)}>Open Contract</Button>
       </div>
     )
   }
@@ -43,10 +63,10 @@ export default function ClauseViewer() {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <button
-        onClick={() => navigate('/analysis')}
+        onClick={() => navigate(-1)}
         style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 14, marginBottom: 20, padding: 0 }}
       >
-        ← Back to Analysis
+        ← Back
       </button>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
@@ -69,6 +89,32 @@ export default function ClauseViewer() {
           {analysis.executive_summary || analysis.summary || 'No summary available'}
         </p>
       </Card>
+
+      {(analysis.parties?.length > 0 || analysis.key_dates?.length > 0) && (
+        <Card style={{ marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
+            {analysis.parties?.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: 13, color: '#64748B', marginBottom: 8, fontWeight: 600 }}>Parties</h3>
+                {analysis.parties.map((p, i) => (
+                  <div key={i} style={{ color: '#E2E8F0', fontSize: 14, marginBottom: 4 }}>{p}</div>
+                ))}
+              </div>
+            )}
+            {analysis.key_dates?.length > 0 && (
+              <div>
+                <h3 style={{ fontSize: 13, color: '#64748B', marginBottom: 8, fontWeight: 600 }}>Key Dates</h3>
+                {analysis.key_dates.map((d, i) => (
+                  <div key={i} style={{ fontSize: 14, marginBottom: 4 }}>
+                    <span style={{ color: '#94A3B8' }}>{d.label}: </span>
+                    <span style={{ color: '#E2E8F0' }}>{d.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {analysis.clauses?.length > 0 && (
         <Card style={{ marginBottom: 24 }}>

@@ -54,7 +54,6 @@ frontend/.env.production.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
-frontend/package-lock.json
 frontend/yarn.lock
 frontend/.pnpm-debug.log
 frontend/.vite/
@@ -127,3 +126,5 @@ docker-compose*.yml
 *.swp
 *.swo
 *~
+__pycache__/
+*.py[cod]

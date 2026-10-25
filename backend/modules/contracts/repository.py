@@ -1,11 +1,16 @@
-from sqlalchemy import select, func, update
+from typing import Optional, List
+
+from sqlalchemy import select, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import gen_uuid
 from modules.contracts.models import Contract
 from core.constants import ContractStatus
 
-from typing import Optional, List
+
+def owned_contract_ids(user_id: str):
+    """Subquery of contract ids belonging to a user — used to scope obligations/alerts/analyses."""
+    return select(Contract.id).where(Contract.user_id == user_id)
 
 
 class ContractRepository:
@@ -39,14 +44,16 @@ class ContractRepository:
 
     async def list_all(
         self,
-        user_id: Optional[str] = None,
+        user_id: str,
         skip: int = 0,
         limit: int = 50,
         status: Optional[str] = None,
     ) -> List[Contract]:
-        q = select(Contract).order_by(Contract.created_at.desc())
-        if user_id:
-            q = q.where(Contract.user_id == user_id)
+        q = (
+            select(Contract)
+            .where(Contract.user_id == user_id)
+            .order_by(Contract.created_at.desc())
+        )
         if status:
             q = q.where(Contract.status == status)
         q = q.offset(skip).limit(limit)
@@ -78,9 +85,24 @@ class ContractRepository:
         )
         await self.db.flush()
 
-    async def stats(self) -> dict:
+    async def delete_with_children(self, contract_id: str):
+        """
+        Explicitly delete children. SQLite does not enforce ON DELETE CASCADE
+        unless PRAGMA foreign_keys=ON, so obligations/alerts were left orphaned
+        and kept showing up in the Obligations/Alerts pages.
+        """
+        from modules.analysis.models import Analysis
+        from modules.obligations.models import Obligation
+        from modules.alerts.models import Alert
+
+        for model in (Analysis, Obligation, Alert):
+            await self.db.execute(delete(model).where(model.contract_id == contract_id))
+        await self.db.execute(delete(Contract).where(Contract.id == contract_id))
+        await self.db.flush()
+
+    async def stats(self, user_id: str) -> dict:
         async def count(where_clause=None) -> int:
-            q = select(func.count(Contract.id))
+            q = select(func.count(Contract.id)).where(Contract.user_id == user_id)
             if where_clause is not None:
                 q = q.where(where_clause)
             return (await self.db.execute(q)).scalar() or 0

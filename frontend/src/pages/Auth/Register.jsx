@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 
 const inp = {
@@ -20,7 +20,7 @@ const lbl = { display: 'block', fontSize: 13, fontWeight: 500, color: '#CBD5E1',
 export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
-  const { register, isLoading } = useAuthStore()
+  const { register, isLoading, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {

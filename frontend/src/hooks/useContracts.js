@@ -18,7 +18,10 @@ export const useUploadContract = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ file, onProgress }) => contractService.uploadContract(file, onProgress),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contractStats'] })
+    },
   })
 }
 

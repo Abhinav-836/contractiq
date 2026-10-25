@@ -11,9 +11,6 @@ OBLIGATION_KEYWORDS = [
     "responsible for", "duty to",
 ]
 
-_CLIENT_WORDS = ("company", "client", "buyer", "customer")
-_VENDOR_WORDS = ("developer", "vendor", "provider", "supplier", "contractor")
-
 
 async def obligation_agent(state: dict) -> dict:
     text = state.get("clean_text") or state.get("raw_text") or ""
@@ -24,7 +21,8 @@ async def obligation_agent(state: dict) -> dict:
 
 def _extract_obligations(text: str) -> list[dict]:
     obligations: list[dict] = []
-    sentences = re.split(r"(?<=[.;])\s+", text)
+    seen: set[str] = set()
+    sentences = re.split(r"(?<=[.;])\s+|\n{2,}", text)
 
     for sentence in sentences:
         sentence = sentence.strip()
@@ -32,25 +30,18 @@ def _extract_obligations(text: str) -> list[dict]:
             continue
 
         s_lower = sentence.lower()
-        if not any(kw in s_lower for kw in OBLIGATION_KEYWORDS):
+        if not any(re.search(rf"\b{re.escape(kw)}\b", s_lower) for kw in OBLIGATION_KEYWORDS):
             continue
+        if s_lower in seen:
+            continue
+        seen.add(s_lower)
 
-        first_word = sentence.split()[0].lower().rstrip(".,;:")
+        # Use the sentence verbatim. The old "COMPANY shall " / "DEVELOPER shall "
+        # prefixing produced garbage like "COMPANY shall the Client must pay ...".
+        description = " ".join(sentence.split())
 
-        party_prefix = ""
-        if any(w in s_lower for w in _CLIENT_WORDS):
-            party_prefix = "COMPANY shall "
-        elif any(w in s_lower for w in _VENDOR_WORDS):
-            party_prefix = "DEVELOPER shall "
-
-        # Build description without double-prefixing
-        if party_prefix and first_word not in (_CLIENT_WORDS + _VENDOR_WORDS):
-            description = f"{party_prefix}{sentence[0].lower()}{sentence[1:]}"
-        else:
-            description = sentence
-
-        words = sentence.split()[:8]
-        title = " ".join(words) + ("..." if len(words) == 8 else "")
+        all_words = description.split()
+        title = " ".join(all_words[:8]) + ("..." if len(all_words) > 8 else "")
 
         due_date = None
         m = re.search(r"within\s+(\d+)\s+(days?|months?|weeks?)", s_lower)
