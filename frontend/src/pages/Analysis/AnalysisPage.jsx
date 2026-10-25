@@ -10,11 +10,12 @@ export default function AnalysisPage() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
 
-  const { data: contracts = [], isLoading, error } = useQuery({
-    queryKey: ['contracts'],
-    queryFn: () => getContracts(),
-    refetchInterval: 5000,
-  })
+    const { data: contracts = [], isLoading, error } = useQuery({
+    queryKey: ['contracts', 'all'],
+    queryFn: () => getContracts({ limit: 100 }),
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => c.status === 'processing') ? 5000 : false,
+    })
 
   const filtered = contracts.filter((c) => filter === 'all' || c.risk_level === filter || c.status === filter)
 
@@ -30,7 +31,7 @@ export default function AnalysisPage() {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {['all', 'high', 'medium', 'low', 'completed', 'processing'].map((f) => (
+        {['all', 'high', 'medium', 'low', 'completed', 'processing', 'failed'].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}

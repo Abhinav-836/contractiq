@@ -41,7 +41,6 @@ export const CLAUSE_TYPES = [
 
 export const SUPPORTED_FILE_TYPES = {
   'application/pdf': ['.pdf'],
-  'application/msword': ['.doc'],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
   'text/plain': ['.txt'],
 }

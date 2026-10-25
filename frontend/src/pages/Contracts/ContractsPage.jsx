@@ -19,6 +19,7 @@ export default function ContractsPage() {
   const { data: contracts = [], isLoading, error } = useQuery({
     queryKey: ['contracts', 'all'],
     queryFn: () => getContracts({ limit: 100 }),
+    // only poll while something is still being analyzed
     refetchInterval: (query) =>
       query.state.data?.some((c) => c.status === 'processing') ? 5000 : false,
   })
@@ -26,13 +27,14 @@ export default function ContractsPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteContract,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['contracts'] })
-      qc.invalidateQueries({ queryKey: ['contractStats'] })
+      for (const key of ['contracts', 'contractStats', 'obligations', 'obligationStats', 'alerts', 'alertStats']) {
+        qc.invalidateQueries({ queryKey: [key] })
+      }
       toast.success('Contract deleted')
       setContractToDelete(null)
     },
     onError: (err) => {
-      toast.error(err.response?.data?.detail || 'Failed to delete contract')
+      toast.error(getErrorMessage(err, 'Failed to delete contract'))
     },
   })
 
@@ -43,12 +45,6 @@ export default function ContractsPage() {
       (!search || name.toLowerCase().includes(search.toLowerCase()))
     )
   })
-
-  for (const key of ['contracts', 'contractStats', 'obligations', 'obligationStats', 'alerts', 'alertStats']) {
-        qc.invalidateQueries({ queryKey: [key] })
-  }
-
-  toast.error(getErrorMessage(err, 'Failed to delete contract'))
 
   const statuses = [...new Set(contracts.map((c) => c.status).filter(Boolean))]
 

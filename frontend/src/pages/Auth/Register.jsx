@@ -44,7 +44,8 @@ export default function Register() {
 
     if (result.success) navigate('/dashboard')
   }
-
+      if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  
   return (
     <div
       style={{
