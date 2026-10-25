@@ -169,7 +169,7 @@ export default function ContractDetail() {
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          {analysis && (
+          {analysis && !notContract && (
             <Button variant="outline" onClick={() => navigate(`/analysis/${id}`)}>
               View Full Analysis
             </Button>
