@@ -6,7 +6,7 @@ from typing import Optional
 
 import aiofiles
 from fastapi import UploadFile, HTTPException, BackgroundTasks
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -181,7 +181,17 @@ async def _run_analysis_task(contract_id: str, file_type: str, filename: str) ->
                 llm_provider=analysis_data.get("llm_provider", "unknown"),
             )
 
-            risk_level = analysis_data.get("risk_level") or "medium"
+            if analysis_data.get("is_contract") is False:
+                # No risk badge, and not counted in high/medium/low stats
+                risk_level = None
+                await repo.update_status(contract_id, "completed")
+                await db.execute(
+                    update(Contract).where(Contract.id == contract_id).values(risk_level=None)
+                )
+            else:
+                risk_level = analysis_data.get("risk_level") or "medium"
+                await repo.update_status(contract_id, "completed", risk_level=risk_level)
+            await db.commit()
             await repo.update_status(contract_id, "completed", risk_level=risk_level)
             await db.commit()
 

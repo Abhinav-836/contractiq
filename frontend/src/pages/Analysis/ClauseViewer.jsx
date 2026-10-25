@@ -46,6 +46,18 @@ export default function ClauseViewer() {
       </div>
     )
   }
+  if (analysis?.risk_level === 'not_contract') {
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center', padding: 60 }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
+        <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>This doesn't look like a contract</h3>
+        <p style={{ color: '#94A3B8', marginBottom: 20, lineHeight: 1.6 }}>
+          {analysis.summary || 'No agreement terms were found in this document.'}
+        </p>
+        <Button onClick={() => navigate('/contracts/upload')}>Upload a contract</Button>
+      </div>
+    )
+  }
 
   if (!analysis) {
     return (

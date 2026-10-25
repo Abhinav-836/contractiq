@@ -47,6 +47,7 @@ export default function ContractDetail() {
 
   const isLoading = contractLoading || (contract?.status === 'completed' && analysisLoading)
   const isProcessing = contract?.status === 'processing'
+  const notContract = analysis?.risk_level === 'not_contract'
 
   const invalidateLists = () => {
     // every list/stat view that could still show this contract (all have 5-min staleTime)
@@ -193,7 +194,19 @@ export default function ContractDetail() {
         </Card>
       )}
 
-      {analysis && (
+      {notContract && (
+        <Card style={{ marginBottom: 24, padding: 32, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
+          <h3 style={{ color: '#E2E8F0', marginBottom: 8 }}>This doesn't look like a contract</h3>
+          <p style={{ color: '#94A3B8', fontSize: 14, lineHeight: 1.6, maxWidth: 520, margin: '0 auto 20px' }}>
+            {analysis.summary || 'No agreement terms were found in this document.'} No risk score,
+            obligations or alerts were generated.
+          </p>
+          <Button onClick={() => navigate('/contracts/upload')}>Upload a contract</Button>
+        </Card>
+      )}
+
+      {analysis && !notContract && (
         <>
           <Card style={{ marginBottom: 24 }}>
             <h2

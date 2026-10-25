@@ -15,9 +15,21 @@ system: |
   5. Calculate a realistic risk score between 0-100
 
 user_template: |
-  Analyze this contract and return a JSON object with this exact structure:
+  First decide whether the document below is actually a contract or legal agreement
+  (an agreement, terms of service, NDA, lease, offer letter, purchase order with terms, etc.).
+  Sample text, placeholder or "lorem ipsum" text, articles, invoices without terms, resumes,
+  manuals and other non-agreements are NOT contracts.
+
+  If it is NOT a contract, return ONLY:
+  {
+    "is_contract": false,
+    "not_contract_reason": "One sentence describing what the document actually is"
+  }
+
+  If it IS a contract, return a JSON object with this exact structure:
   
   {
+    "is_contract": true,
     "executive_summary": "2-3 sentence high-level summary of the contract",
     "summary": "5-7 sentence detailed analysis covering scope, obligations, and key risks",
     "risk_score": 0-100,
@@ -40,6 +52,7 @@ user_template: |
   }
   
   IMPORTANT GUIDELINES:
+  - Never invent clauses or risks that are not in the text
   - Analyze 6-10 key clauses
   - Risk score: 0-30 = low, 31-60 = medium, 61-100 = high
   - Extract actual parties and dates from the text

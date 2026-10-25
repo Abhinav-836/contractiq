@@ -33,6 +33,12 @@ async def orchestrate_analysis(
         f"risk={result.get('risk_level')} score={result.get('risk_score')}"
     )
 
+    if result.get("is_contract") is False:
+        # Not an agreement: obligations/alerts built from it would be noise
+        logger.info(f"orchestrator.not_a_contract contract_id={contract_id}")
+        result["obligations_extracted"] = []
+        return result
+
     obligations = result.get("obligations_extracted", [])
     if obligations:
         created = await _create_obligations(db, contract_id, obligations)

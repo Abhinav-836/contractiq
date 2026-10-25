@@ -83,7 +83,15 @@ async def risk_agent(state: dict) -> dict:
         try:
             logger.info(f"risk_agent.try provider={provider} model={client.model_name}")
             raw = await client.complete(system=system, user=user, json_mode=True)
-            parsed = _normalize(_parse_llm_response(raw))
+            data = _parse_llm_response(raw)
+            if _is_false(data.get("is_contract")):
+                # The model says this isn't an agreement — don't fabricate risks for it
+                analysis = _not_contract_result(data.get("not_contract_reason"))
+                analysis["llm_provider"] = provider
+                analysis["llm_model"] = client.model_name
+                logger.info(f"risk_agent.not_a_contract provider={provider}")
+                break
+            parsed = _normalize(data)
             if not parsed["executive_summary"] and not parsed["clauses"]:
                 raise ValueError("LLM response missing summary and clauses")
             analysis = parsed
@@ -108,7 +116,7 @@ async def risk_agent(state: dict) -> dict:
                         fallback_used=True, fallback_chain=error_history)
 
     metadata = state.get("metadata", {}) or {}
-    if not analysis.get("parties") and metadata.get("detected_parties"):
+    if analysis.get("is_contract", True) and not analysis.get("parties") and metadata.get("detected_parties"):
         analysis["parties"] = metadata["detected_parties"]
 
     logger.info(
@@ -122,6 +130,28 @@ async def risk_agent(state: dict) -> dict:
 # Parsing & normalization — LLM output is untrusted. Anything that reaches the
 # DB must match AnalysisOut, otherwise GET /analysis/contract/{id} returns 500.
 # ─────────────────────────────────────────────────────────────────────────────
+
+NOT_CONTRACT = "not_contract"
+
+
+def _is_false(value) -> bool:
+    return value is False or str(value).strip().lower() in ("false", "no", "0")
+
+
+def _not_contract_result(reason) -> dict:
+    reason = _str(reason) or "The document does not contain the terms of an agreement."
+    return {
+        "is_contract": False,
+        "executive_summary": "This document doesn't appear to be a contract, so no risk analysis was produced.",
+        "summary": reason,
+        "risk_score": None,
+        "risk_level": NOT_CONTRACT,
+        "parties": [],
+        "key_dates": [],
+        "clauses": [],
+        "recommendations": [],
+    }
+
 
 def _parse_llm_response(raw: str) -> dict:
     if not raw or not raw.strip():
@@ -225,6 +255,7 @@ def _normalize(data: dict) -> dict:
     recommendations = [r for r in (_str(x) for x in (data.get("recommendations") or [])) if r][:15]
 
     return {
+        "is_contract": True,
         "executive_summary": _str(data.get("executive_summary")),
         "summary": _str(data.get("summary")),
         "risk_score": score,
