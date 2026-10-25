@@ -32,8 +32,7 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
-# Order matters — most specific first. Matched on word boundaries so "nda"
-# no longer matches "standard"/"calendar"/"agenda".
+# Matched on word boundaries so "nda" no longer matches "standard"/"calendar"/"agenda".
 _TYPE_PATTERNS: list[tuple[list[str], str]] = [
     (["non-disclosure", "nda", "confidentiality agreement", "mutual confidentiality"], "NDA"),
     (["employment agreement", "offer letter", "employment contract"], "Employment Agreement"),
@@ -53,33 +52,47 @@ _TYPE_PATTERNS: list[tuple[list[str], str]] = [
 # the old full-text substring match label most contracts as NDAs).
 _TITLE_REGION_CHARS = 1500
 _HEADING_RE = re.compile(
-    r"^\s*([A-Z][A-Za-z&/\-\s]{2,80}?\b(?:AGREEMENT|Agreement|CONTRACT|Contract))\s*$",
+    # [ \t] not \s: a heading is a single line, it must not swallow the line above it
+    r"^[ \t]*([A-Z][A-Za-z&/\- \t]{2,80}?\b(?:AGREEMENT|Agreement|CONTRACT|Contract))[ \t]*$",
     re.MULTILINE,
 )
 
 
-def _matches(keywords: list[str], text: str) -> bool:
-    return any(re.search(rf"\b{re.escape(k)}\b", text) for k in keywords)
+def _first_match_pos(keywords: list[str], text: str) -> int:
+    """Position of the earliest whole-word match of any keyword, or -1."""
+    positions = [m.start() for k in keywords if (m := re.search(rf"\b{re.escape(k)}\b", text))]
+    return min(positions) if positions else -1
 
 
 def _detect_type(text: str, filename: str) -> str:
-    name = re.sub(r"[_\-.]+", " ", filename).lower()
+    name = re.sub(r"[_\-.()]+", " ", filename).lower()
     head = text[:_TITLE_REGION_CHARS]
-    title_region = f"{name}\n{head.lower()}"
 
-    # 1) Known type named in the filename or title area
+    # 1) The filename usually names the document ("..._Testing_Agreement_...")
     for keywords, label in _TYPE_PATTERNS:
-        if _matches(keywords, title_region):
+        if _first_match_pos(keywords, name) >= 0:
             return label
 
-    # 2) The document's own heading, e.g. "TESTING SERVICES AGREEMENT"
+    # 2) In the opening text, the EARLIEST match wins — the title comes first.
+    #    Checking patterns in priority order instead let a passing reference like
+    #    "...under a separate Non-Disclosure Agreement" override "TEST AGREEMENT".
+    head_lower = head.lower()
+    best_label, best_pos = None, len(head_lower) + 1
+    for keywords, label in _TYPE_PATTERNS:
+        pos = _first_match_pos(keywords, head_lower)
+        if 0 <= pos < best_pos:
+            best_label, best_pos = label, pos
+
+    # 3) The document's own heading, e.g. "WEBSITE DEVELOPMENT AGREEMENT". It wins
+    #    when it comes before any keyword match: a title we don't have a pattern
+    #    for beats a passing mention of another contract type further down.
     m = _HEADING_RE.search(head)
-    if m:
+    if m and m.end() <= best_pos:  # no known type inside the heading itself
         heading = " ".join(m.group(1).split())
         if 2 <= len(heading.split()) <= 8:
             return heading.title()
 
-    return "Commercial Agreement"
+    return best_label or "Commercial Agreement"
 
 
 def _extract_metadata(text: str) -> dict:
