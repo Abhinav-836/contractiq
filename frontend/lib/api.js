@@ -72,7 +72,7 @@ export const contractsAPI = {
 };
 
 export const analysisAPI = {
-  // 404 means "not analysed yet", not an error.
+  // 404 means "not analysed yet", not an error .
   forContract: (contractId) =>
     data(api.get(`/analysis/contract/${contractId}`)).catch((err) => {
       if (err?.response?.status === 404) return null;
