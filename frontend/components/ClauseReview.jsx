@@ -12,7 +12,7 @@ export function Clause({ clause, index }) {
   const k = riskKey(clause.risk_level) || "medium";
   const text = (clause.clause_text || "").trim();
   return (
-    <li className="grid gap-x-8 gap-y-3 py-6 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
+    <li id={`clause-${index + 1}`} className="grid scroll-mt-24 gap-x-8 gap-y-3 py-6 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
       <div className="min-w-0">
         <p className="flex items-baseline gap-2 text-sm text-muted">
           <span className="tabular-nums text-faint">§{index + 1}</span>
@@ -48,11 +48,14 @@ export function Clause({ clause, index }) {
 
 const ORDER = { high: 0, medium: 1, low: 2 };
 
-export default function ClauseReview({ clauses, filter = "all" }) {
-  const list = (clauses || [])
+/** Clauses in reading order for the review: highest risk first, then as they appear. */
+export const orderClauses = (clauses) =>
+  (clauses || [])
     .map((c, i) => ({ c, i }))
-    .filter(({ c }) => filter === "all" || (riskKey(c.risk_level) || "medium") === filter)
     .sort((a, b) => (ORDER[riskKey(a.c.risk_level)] ?? 1) - (ORDER[riskKey(b.c.risk_level)] ?? 1) || a.i - b.i);
+
+export default function ClauseReview({ clauses, filter = "all" }) {
+  const list = orderClauses(clauses).filter(({ c }) => filter === "all" || (riskKey(c.risk_level) || "medium") === filter);
 
   if (!list.length) {
     return <p className="py-8 text-muted">No clauses at this risk level.</p>;

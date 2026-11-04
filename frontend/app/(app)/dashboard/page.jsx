@@ -5,6 +5,7 @@ import { useAlerts, useAlertStats, useContracts, useContractStats, useObligation
 import { useSession } from "@/lib/session";
 import { formatDue, dueSortKey } from "@/lib/format";
 import ContractTable from "@/components/ContractTable";
+import RiskBar from "@/components/RiskBar";
 import { Empty, ErrorNote, Loading } from "@/components/States";
 
 function Figure({ value, label, href, tone }) {
@@ -55,21 +56,61 @@ export default function Dashboard() {
               : "\u00a0"}
           </p>
         </div>
-        <Link href="/contracts/upload" className="btn btn-primary self-start sm:self-auto">
+        <Link href="/contracts/upload" className="btn btn-primary self-start sm:hidden">
           Upload contract
         </Link>
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-y border-rule py-5 sm:grid-cols-4">
-        <Figure value={cStats.data?.total_contracts} label="Contracts" href="/contracts" />
-        <Figure value={cStats.data ? highRisk : undefined} label="High risk" href="/contracts?risk=high" tone={highRisk ? "text-mark-high" : ""} />
-        <Figure
-          value={oStats.data ? (oStats.data.pending ?? 0) + (oStats.data.overdue ?? 0) : undefined}
-          label={oStats.data?.overdue ? `Open obligations, ${oStats.data.overdue} overdue` : "Open obligations"}
-          href="/obligations"
-        />
-        <Figure value={aStats.data?.unread} label="Unread alerts" href="/alerts" />
-      </dl>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-rule bg-rule">
+          <div className="bg-page px-5 py-4">
+            <Figure value={cStats.data?.total_contracts} label="Contracts" href="/contracts" />
+          </div>
+          <div className="bg-page px-5 py-4">
+            <Figure value={cStats.data ? highRisk : undefined} label="High risk" href="/contracts?risk=high" tone={highRisk ? "text-mark-high" : ""} />
+          </div>
+          <div className="bg-page px-5 py-4">
+            <Figure
+              value={oStats.data ? (oStats.data.pending ?? 0) + (oStats.data.overdue ?? 0) : undefined}
+              label={oStats.data?.overdue ? `Open obligations, ${oStats.data.overdue} overdue` : "Open obligations"}
+              href="/obligations"
+              tone={oStats.data?.overdue ? "text-danger" : ""}
+            />
+          </div>
+          <div className="bg-page px-5 py-4">
+            <Figure value={aStats.data?.unread} label="Unread alerts" href="/alerts" />
+          </div>
+        </dl>
+
+        <section aria-labelledby="portfolio" className="rounded-xl border border-rule bg-page p-5">
+          <h2 id="portfolio" className="font-sans text-sm font-semibold tracking-normal text-muted">
+            Portfolio risk
+          </h2>
+          {cStats.data?.total_contracts ? (
+            <>
+              <p className="mt-1 font-serif text-2xl">
+                {highRisk
+                  ? `${Math.round((highRisk / cStats.data.total_contracts) * 100)}% of contracts need attention`
+                  : "Nothing high risk right now"}
+              </p>
+              <div className="mt-4">
+                <RiskBar
+                  label="Contracts by risk"
+                  counts={{
+                    high: cStats.data.high_risk ?? 0,
+                    medium: cStats.data.medium_risk ?? 0,
+                    low: cStats.data.low_risk ?? 0,
+                    other: (cStats.data.processing ?? 0) + (cStats.data.failed ?? 0),
+                  }}
+                  hrefFor={(k) => (k === "other" ? "/contracts" : `/contracts?risk=${k}`)}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-muted">Your contracts&rsquo; risk spread shows here once the first review is done.</p>
+          )}
+        </section>
+      </div>
 
       <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-labelledby="recent">

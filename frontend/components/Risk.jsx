@@ -20,10 +20,10 @@ export function RiskChip({ level, short = false, className = "" }) {
 
 const BAR = { high: "bg-mark-high", medium: "bg-mark-med", low: "bg-mark-low" };
 
-/** 0–100 score on a three-band scale with a pen-stroke marker. */
+/** 0–100 score on the backend's bands (0–30 low, 31–60 medium, 61–100 high) with a pen-stroke marker. */
 export function RiskMeter({ score, level }) {
   const s = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
-  const k = riskKey(level) || (s >= 70 ? "high" : s >= 40 ? "medium" : "low");
+  const k = riskKey(level) || (s >= 61 ? "high" : s >= 31 ? "medium" : "low");
   return (
     <div className="w-full sm:w-64">
       <div className="flex items-baseline justify-between">
@@ -36,9 +36,9 @@ export function RiskMeter({ score, level }) {
       </p>
       <div className="relative mt-3" role="img" aria-label={`Risk score ${s} out of 100, ${RISK[k].label.toLowerCase()}`}>
         <div className="flex h-1.5 overflow-hidden rounded-full">
-          <span className="w-[40%] bg-hi-low" />
+          <span className="w-[30%] bg-hi-low" />
           <span className="w-[30%] bg-hi-med" />
-          <span className="w-[30%] bg-hi-high" />
+          <span className="w-[40%] bg-hi-high" />
         </div>
         <span aria-hidden="true" className={`absolute -top-1 h-3.5 w-1 -translate-x-1/2 rounded-full ${BAR[k]}`} style={{ left: `${s}%` }} />
       </div>

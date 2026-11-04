@@ -1,5 +1,6 @@
 import "@fontsource-variable/source-serif-4";
 import "@fontsource-variable/public-sans";
+import "@fontsource/mrs-saint-delafield";
 import { Analytics } from "@vercel/analytics/next";
 import Providers from "@/components/Providers";
 import "./globals.css";

@@ -8,7 +8,8 @@ import { errorMessage } from "@/lib/api";
 import { fileKind, fileSize, formatDate, formatDue } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
-import ClauseReview from "@/components/ClauseReview";
+import ClauseReview, { orderClauses } from "@/components/ClauseReview";
+import RiskBar from "@/components/RiskBar";
 import { ConfirmDelete } from "@/components/Modal";
 import { RiskMeter } from "@/components/Risk";
 import { ErrorNote, Filters, Loading, Spinner } from "@/components/States";
@@ -157,17 +158,33 @@ export default function ContractPage() {
 
   return (
     <article>
-      <Link href="/contracts" className="text-sm text-muted hover:text-ink">
+      <Link href="/contracts" className="no-print text-sm text-muted hover:text-ink">
         Contracts
       </Link>
 
+      <p className="hidden text-sm text-muted print:block">
+        ContractIQ review, printed {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}. Flags risks to
+        review; not legal advice.
+      </p>
       <header className="mt-2 flex flex-col gap-6 border-b border-rule pb-8 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <h1 className="break-words text-3xl sm:text-4xl">{c.filename}</h1>
           <p className="mt-2 text-sm text-muted">
             {fileKind(c)}, {fileSize(c.file_size)}, uploaded {formatDate(c.created_at)}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="no-print mt-4 flex flex-wrap gap-2">
+            {a && !notContract && (
+              <button
+                type="button"
+                className="btn btn-primary px-3 py-1.5"
+                onClick={() => {
+                  track("review_printed");
+                  window.print();
+                }}
+              >
+                Save as PDF
+              </button>
+            )}
             {c.status === "completed" && !notContract && (
               <button type="button" className="btn btn-quiet px-3 py-1.5" onClick={retry} disabled={reanalyze.isPending}>
                 {reanalyze.isPending ? "Restarting…" : "Review again"}
@@ -219,6 +236,7 @@ export default function ContractPage() {
                   Clauses
                 </h2>
                 {clauses.length > 0 && (
+                  <div className="no-print">
                   <Filters
                     label="Show clauses"
                     value={filter}
@@ -230,6 +248,7 @@ export default function ContractPage() {
                       ["low", "Low", count("low")],
                     ]}
                   />
+                  </div>
                 )}
               </div>
               {clauses.length ? (
@@ -296,6 +315,36 @@ export default function ContractPage() {
                 <ContractObligations contractId={id} />
               </div>
             </section>
+            {clauses.length > 0 && (
+              <section aria-labelledby="index" className="no-print lg:sticky lg:top-24">
+                <h2 id="index" className="text-sm font-semibold text-muted">
+                  {clauses.length} clause{clauses.length === 1 ? "" : "s"} reviewed
+                </h2>
+                <div className="mt-3">
+                  <RiskBar compact label="Clauses by risk" counts={{ high: count("high"), medium: count("medium"), low: count("low") }} />
+                </div>
+                <ol className="mt-4 space-y-1 text-sm">
+                  {orderClauses(clauses).map(({ c: cl, i }) => (
+                    <li key={i}>
+                      <a
+                        href={`#clause-${i + 1}`}
+                        onClick={() => setFilter("all")}
+                        className="flex items-center gap-2 rounded px-1.5 py-1 text-muted hover:bg-bg hover:text-ink"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            { high: "bg-mark-high", medium: "bg-mark-med", low: "bg-mark-low" }[cl.risk_level] || "bg-mark-med"
+                          }`}
+                        />
+                        <span className="truncate">{cl.clause_type || "Clause"}</span>
+                        <span className="ml-auto tabular-nums text-faint">§{i + 1}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
           </aside>
         </div>
       )}

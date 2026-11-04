@@ -80,6 +80,7 @@
 
   --font-serif: "Source Serif 4 Variable", "Iowan Old Style", Georgia, serif;
   --font-sans: "Public Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-signature: "Mrs Saint Delafield", "Snell Roundhand", cursive;
 }
 
 html,
@@ -226,5 +227,54 @@ p {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hero backdrop: faint legal-pad ruling with a red margin line, fading out. */
+.legal-pad::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent calc(2.5rem - 1px), color-mix(in srgb, var(--mark-high) 22%, transparent) 2.5rem, transparent calc(2.5rem + 1px)),
+    repeating-linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--pen) 9%, transparent) 31px 32px);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+}
+
+/* On phones the margin line would run through the text — keep only the ruling. */
+@media (max-width: 639px) {
+  .legal-pad::before {
+    background: repeating-linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--pen) 9%, transparent) 31px 32px);
+  }
+}
+
+/* "Save as PDF": print only the review, on white paper. */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  :root {
+    --bg: #fff;
+    --page: #fff;
+    --ink: #000;
+    --muted: #333;
+    --faint: #555;
+  }
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .highlight {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  li,
+  aside {
+    break-inside: avoid;
   }
 }

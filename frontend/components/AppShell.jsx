@@ -9,6 +9,7 @@ import { clearSession, saveSession, useSession } from "@/lib/session";
 import { useAlertStats } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import Logo from "./Logo";
+import SignatureFooter from "./SignatureFooter";
 import { Spinner } from "./States";
 
 const NAV = [
@@ -108,7 +109,7 @@ export default function AppShell({ children }) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 border-b border-rule bg-page/95 backdrop-blur">
+      <header className="no-print sticky top-0 z-20 border-b border-rule bg-page/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 px-4 sm:px-6">
           <div className="flex h-14 items-center">
             <Logo href="/dashboard" />
@@ -147,15 +148,7 @@ export default function AppShell({ children }) {
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         {children}
       </main>
-      <footer className="border-t border-rule">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-sm text-faint sm:px-6">
-          ContractIQ flags risks to review. It isn&rsquo;t legal advice. Built by{" "}
-          <a href="https://github.com/Abhinav-836" className="text-muted hover:text-ink">
-            Abhinav Ashutosh
-          </a>
-          .
-        </p>
-      </footer>
+      <SignatureFooter app />
     </div>
   );
 }
