@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+/*
+ * ContractIQ — a marked-up legal document. Paper, ink, a fountain-pen blue
+ * for actions, and three highlighter colours for risk.
+ */
+:root {
+  --bg: #f3f4f7;
+  --page: #ffffff;
+  --ink: #161b2e;
+  --muted: #5a6175;
+  --faint: #8a90a2;
+  --rule: #dcdfe6;
+  --pen: #2b3c9e;
+  --pen-ink: #ffffff;
+
+  /* highlighter wash / text that sits on it / margin mark */
+  --hi-high: #ffd0c9;
+  --hi-high-ink: #8f1f12;
+  --mark-high: #c8372a;
+  --hi-med: #fde98f;
+  --hi-med-ink: #6b4e00;
+  --mark-med: #c99300;
+  --hi-low: #cdeed7;
+  --hi-low-ink: #1c5e34;
+  --mark-low: #2e8a50;
+
+  --ok: #2e8a50;
+  --danger: #b4281c;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1220;
+    --page: #171b2c;
+    --ink: #e6e8f0;
+    --muted: #a0a6b8;
+    --faint: #6d7388;
+    --rule: #2a3046;
+    --pen: #93a3ff;
+    --pen-ink: #0f1220;
+
+    --hi-high: #5a1f1a;
+    --hi-high-ink: #ffcfc8;
+    --mark-high: #ff7a6b;
+    --hi-med: #4d3d0a;
+    --hi-med-ink: #fde98f;
+    --mark-med: #f0c040;
+    --hi-low: #173d27;
+    --hi-low-ink: #bdeccd;
+    --mark-low: #6fd394;
+
+    --ok: #6fd394;
+    --danger: #ff8a7c;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-page: var(--page);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-rule: var(--rule);
+  --color-pen: var(--pen);
+  --color-pen-ink: var(--pen-ink);
+  --color-hi-high: var(--hi-high);
+  --color-hi-high-ink: var(--hi-high-ink);
+  --color-mark-high: var(--mark-high);
+  --color-hi-med: var(--hi-med);
+  --color-hi-med-ink: var(--hi-med-ink);
+  --color-mark-med: var(--mark-med);
+  --color-hi-low: var(--hi-low);
+  --color-hi-low-ink: var(--hi-low-ink);
+  --color-mark-low: var(--mark-low);
+  --color-ok: var(--ok);
+  --color-danger: var(--danger);
+
+  --font-serif: "Source Serif 4 Variable", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Public Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--hi-med);
+  color: var(--hi-med-ink);
+}
+
+/* Component classes live in the components layer so Tailwind utilities
+   (hidden, px-3, w-auto…) can still override them. */
+@layer components {
+/*
+ * Highlighter: the wash wraps line by line like a real marker stroke,
+ * with a slightly ragged leading edge.
+ */
+.highlight {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0.08em 0.2em;
+  margin: 0 -0.1em;
+  border-radius: 0.2em 0.35em 0.25em 0.3em;
+}
+.highlight-high {
+  background: var(--hi-high);
+  color: var(--hi-high-ink);
+}
+.highlight-medium {
+  background: var(--hi-med);
+  color: var(--hi-med-ink);
+}
+.highlight-low {
+  background: var(--hi-low);
+  color: var(--hi-low-ink);
+}
+
+/* Forms */
+.field {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  background: var(--page);
+  padding: 0.65rem 0.8rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field::placeholder {
+  color: var(--faint);
+}
+.field:focus {
+  border-color: var(--pen);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pen) 18%, transparent);
+}
+.field[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: opacity 0.15s, background-color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--pen);
+  color: var(--pen-ink);
+}
+.btn-primary:not(:disabled):hover {
+  opacity: 0.9;
+}
+.btn-quiet {
+  border: 1px solid var(--rule);
+  background: var(--page);
+  color: var(--ink);
+}
+.btn-quiet:not(:disabled):hover {
+  border-color: var(--faint);
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+}
+
+/* Review-in-progress scan line, the page's one ambient motion */
+@keyframes scan {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+.scan-line {
+  animation: scan 1.8s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
