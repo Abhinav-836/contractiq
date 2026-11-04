@@ -108,12 +108,11 @@ async def risk_agent(state: dict) -> dict:
             error_history.append(msg)
 
     if analysis is None:
-        # Mock should never fail, but never leave the pipeline without a result
-        from ai.llm.mock_client import MockLLMClient
-        mock = MockLLMClient()
-        analysis = _normalize(json.loads(await mock.complete(system, user)))
-        analysis.update(llm_provider="mock", llm_model=mock.model_name,
-                        fallback_used=True, fallback_chain=error_history)
+        # Every real provider failed. Raise so the orchestrator marks the
+        # contract as failed and the user sees "Review it again", instead of
+        # saving a made-up analysis from the mock client as if it were real.
+        logger.error(f"risk_agent.all_providers_failed chain={error_history}")
+        raise RuntimeError("All AI providers failed: " + " | ".join(error_history))
 
     metadata = state.get("metadata", {}) or {}
     if analysis.get("is_contract", True) and not analysis.get("parties") and metadata.get("detected_parties"):

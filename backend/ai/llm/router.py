@@ -4,7 +4,12 @@ LLM provider selection.
 
 Primary provider = settings.LLM_PROVIDER (ollama | gemini | openai | mock).
 Fallback chain   = every OTHER configured provider in the order
-                   ollama → gemini → openai, then mock (always last).
+                   ollama → gemini → openai.
+
+The mock client is used ONLY when LLM_PROVIDER=mock is set explicitly
+(local development). It is never a silent fallback: if every real provider
+fails, the analysis fails and the user is asked to retry, rather than being
+shown fabricated results.
 
 Previously LLM_PROVIDER was ignored and Ollama was always primary, so
 LLM_PROVIDER=mock (the .env.example default) still hit ollama.com on every
@@ -51,14 +56,21 @@ def _build(provider: str) -> BaseLLMClient:
 
 
 def _primary_name() -> str:
-    name = (settings.LLM_PROVIDER or "mock").strip().lower()
-    if name not in (*_ORDER, "mock"):
-        logger.warning(f"llm.router.unknown_provider value={name} — using mock")
+    name = (settings.LLM_PROVIDER or "ollama").strip().lower()
+    if name == "mock":
         return "mock"
-    if not _is_configured(name):
-        logger.warning(f"llm.router.primary_not_configured provider={name} — using mock")
-        return "mock"
-    return name
+    if name in _ORDER and _is_configured(name):
+        return name
+    # Unknown or unconfigured primary: use the first real provider that is
+    # configured. Never drop to mock here.
+    for candidate in _ORDER:
+        if _is_configured(candidate):
+            logger.warning(f"llm.router.primary_unavailable value={name} — using {candidate}")
+            return candidate
+    raise RuntimeError(
+        f"No AI provider is configured (LLM_PROVIDER={name}). "
+        "Set OLLAMA_API_KEY, GEMINI_API_KEY or OPENAI_API_KEY."
+    )
 
 
 def get_llm_client() -> BaseLLMClient:
@@ -80,11 +92,10 @@ def get_fallback_clients() -> list[tuple[str, BaseLLMClient]]:
 
         primary = _primary_name()
         chain: list[tuple[str, BaseLLMClient]] = []
-        for name in _ORDER:
-            if name != primary and _is_configured(name):
-                chain.append((name, _build(name)))
         if primary != "mock":
-            chain.append(("mock", _build("mock")))
+            for name in _ORDER:
+                if name != primary and _is_configured(name):
+                    chain.append((name, _build(name)))
 
         logger.info(f"llm.router.fallbacks chain={[n for n, _ in chain]}")
         _fallback_clients = chain
