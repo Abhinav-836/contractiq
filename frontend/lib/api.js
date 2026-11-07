@@ -138,6 +138,7 @@ export const signaturesAPI = {
   get: (id) => data(api.get(`/signatures/${id}`)),
   newLink: (id, signerId) => data(api.post(`/signatures/${id}/signers/${signerId}/link`)),
   cancel: (id) => data(api.post(`/signatures/${id}/cancel`)),
+  signedPdf: (id) => api.get(`/signatures/${id}/signed-pdf`, { responseType: "blob", timeout: 120000 }),
 };
 
 /** Public signing routes: no account needed, the token in the link is the key. */
@@ -145,8 +146,24 @@ export const signingAPI = {
   get: (token) => data(api.get(`/sign/${encodeURIComponent(token)}`)),
   documentUrl: (token) => `${API_URL}/api/v1/sign/${encodeURIComponent(token)}/document`,
   sign: (token, body) => data(api.post(`/sign/${encodeURIComponent(token)}/sign`, body)),
+  signedPdfUrl: (token) => `${API_URL}/api/v1/sign/${encodeURIComponent(token)}/signed-pdf`,
   decline: (token, reason) => data(api.post(`/sign/${encodeURIComponent(token)}/decline`, { reason })),
 };
+
+/** Save a blob response as a file, using the server's filename when it sends one. */
+export function saveBlob(res, fallbackName) {
+  const cd = res.headers?.["content-disposition"] || "";
+  const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+  const name = m ? decodeURIComponent(m[1]) : fallbackName;
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 /** Where a signer opens their link. */
 export const signingLink = (token) =>

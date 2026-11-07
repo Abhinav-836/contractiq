@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { errorMessage } from "@/lib/api";
 import { useSignatureCertificate } from "@/lib/queries";
-import { SignatureBadge } from "@/components/Signature";
+import { DownloadSignedPdf, SignatureBadge } from "@/components/Signature";
 import { ErrorNote, Loading } from "@/components/States";
 
 /** Full timestamp for a record: local time with zone, plus UTC. */
@@ -60,9 +60,12 @@ export default function CertificatePage() {
         <Link href={`/contracts/${env.contract_id}`} className="text-sm font-semibold text-muted hover:text-ink">
           ← Back to the contract
         </Link>
-        <button type="button" className="btn btn-quiet px-3 py-1.5" onClick={() => window.print()}>
-          Print or save as PDF
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {completed && <DownloadSignedPdf envelope={env} className="btn btn-primary px-3 py-1.5" />}
+          <button type="button" className="btn btn-quiet px-3 py-1.5" onClick={() => window.print()}>
+            {completed ? "Print certificate" : "Print or save as PDF"}
+          </button>
+        </div>
       </div>
 
       <article className="rounded-xl border border-rule bg-page p-6 sm:p-10 print:border-0 print:p-0">

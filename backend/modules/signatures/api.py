@@ -46,6 +46,25 @@ async def certificate(
     return await service.get_certificate(db, ctx, envelope_id)
 
 
+def _pdf(data: bytes, filename: str) -> Response:
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/{envelope_id}/signed-pdf")
+async def signed_pdf(
+    envelope_id: str, ctx: WorkspaceContext = Depends(current_workspace), db: AsyncSession = Depends(get_db)
+):
+    """Original pages + signature certificate, with the original file attached."""
+    return _pdf(*await service.signed_copy(db, ctx, envelope_id))
+
+
 @router.post("/{envelope_id}/signers/{signer_id}/link", response_model=EnvelopeOut)
 async def new_link(
     envelope_id: str,
@@ -85,6 +104,11 @@ async def signing_document(token: str, db: AsyncSession = Depends(get_db)):
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@public_router.get("/{token}/signed-pdf")
+async def signer_signed_pdf(token: str, db: AsyncSession = Depends(get_db)):
+    return _pdf(*await service.public_signed_copy(db, token))
 
 
 @public_router.post("/{token}/sign", response_model=PublicSigningOut)

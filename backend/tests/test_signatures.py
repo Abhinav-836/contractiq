@@ -239,3 +239,75 @@ def test_client_ip_skips_cloudflare_and_private_hops():
     assert client_info(req({**xff, "CF-Connecting-IP": "49.36.99.1"}))[0] == "49.36.99.1"
     assert client_info(req({"X-Forwarded-For": "172.69.94.197"}))[0] == "172.69.94.197"  # nothing better available
     assert client_info(req({}))[0] == "10.0.0.9"
+
+
+def _real_pdf(pages=2) -> bytes:
+    import io
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for i in range(pages):
+        c.drawString(72, 720, f"Contract page {i + 1}")
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+async def _complete(client, env):
+    for s in env["signers"]:
+        r = await client.post(f"{API}/sign/{env['links'][s['id']]}/sign", json={"typed_name": s["name"], "consent": True})
+        assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("name,body,original_pages", [
+    ("Supply agreement.pdf", None, 2),                      # real PDF: pages kept + stamped
+    ("Notes.txt", "Line one\nLine two " + "x" * 200, 1),   # text typeset onto a page
+    ("Broken.pdf", b"%PDF-1.4 not really a pdf", 0),       # unreadable: certificate + attachment only
+    ("Offer.docx", b"PK\x03\x04 fake docx", 0),            # docx: certificate + attachment only
+])
+async def test_signed_pdf_download(make_user, db, client, name, body, original_pages):
+    import io
+    from pypdf import PdfReader
+
+    team, cid, alice, bob, vic, _ = await setup_team(make_user, db)
+    data = _real_pdf() if body is None else (body.encode() if isinstance(body, str) else body)
+    await db.execute(update(Contract).where(Contract.id == cid).values(filename=name))
+    await db.execute(update(ContractFile).where(ContractFile.contract_id == cid).values(data=data))
+    await db.commit()
+    env = (await send(alice, team, cid)).json()
+
+    # Not available until everyone has signed
+    r = await alice.get(f"{API}/signatures/{env['id']}/signed-pdf", ws=team)
+    assert r.status_code == 409
+    assert (await client.get(f"{API}/sign/{link_for(env, 'Bob')}/signed-pdf")).status_code == 409
+
+    await _complete(client, env)
+    r = await vic.get(f"{API}/signatures/{env['id']}/signed-pdf", ws=team)  # viewers can download
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert "%28signed%29.pdf" in r.headers["content-disposition"]
+    pdf = PdfReader(io.BytesIO(r.content))
+    text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    assert "SIGNATURE CERTIFICATE" in text and env["id"] in text and env["document_sha256"] in text
+    assert "Priya Sharma" in text and "Audit trail" in text
+    assert len(pdf.pages) >= original_pages + 1
+    if original_pages:
+        first = pdf.pages[0].extract_text()
+        assert "Signed electronically with ContractIQ" in first
+    if name == "Supply agreement.pdf":
+        assert "Contract page 1" in pdf.pages[0].extract_text() and "Contract page 2" in pdf.pages[1].extract_text()
+    # The original is attached byte for byte
+    assert pdf.attachments[name] == [data]
+
+    # Each signer can download it from their link too
+    r = await client.get(f"{API}/sign/{link_for(env, 'Priya Sharma')}/signed-pdf")
+    assert r.status_code == 200 and r.content[:4] == b"%PDF"
+
+
+async def test_signed_pdf_needs_workspace_access(make_user, db, client):
+    team, cid, alice, *_ = await setup_team(make_user, db)
+    env = (await send(alice, team, cid)).json()
+    await _complete(client, env)
+    mallory = await make_user("Mallory")
+    assert (await mallory.get(f"{API}/signatures/{env['id']}/signed-pdf")).status_code == 404
+    assert (await client.get(f"{API}/sign/not-a-token/signed-pdf")).status_code == 404

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { errorMessage, signaturesAPI, signingLink } from "@/lib/api";
+import { errorMessage, saveBlob, signaturesAPI, signingLink } from "@/lib/api";
 import { formatDate, timeAgo } from "@/lib/format";
 import { useActiveWorkspace, useContractSignatures, useMembers, useSignatureMutation } from "@/lib/queries";
 import { toast } from "@/lib/toast";
@@ -46,6 +46,36 @@ function SignerRow({ s, children }) {
       {s.decline_reason && <p className="ml-5 mt-1 whitespace-pre-wrap break-words text-muted">&ldquo;{s.decline_reason}&rdquo;</p>}
       {children}
     </li>
+  );
+}
+
+/* ---------------- signed PDF ---------------- */
+export function DownloadSignedPdf({ envelope, className = "btn btn-quiet px-3 py-1.5", label = "Download signed PDF" }) {
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    setBusy(true);
+    try {
+      const res = await signaturesAPI.signedPdf(envelope.id);
+      const base = envelope.document_filename.replace(/\.[^.]+$/, "");
+      saveBlob(res, `${base} (signed).pdf`);
+      track("signed_pdf_downloaded");
+    } catch (err) {
+      // Errors come back as a Blob because of responseType: "blob".
+      let msg = "Couldn't make the signed PDF.";
+      try {
+        msg = JSON.parse(await err.response.data.text()).detail || msg;
+      } catch {
+        msg = errorMessage(err, msg);
+      }
+      toast(msg, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className={className} onClick={download} disabled={busy}>
+      {busy && <Spinner />} {busy ? "Preparing PDF…" : label}
+    </button>
   );
 }
 
@@ -388,6 +418,9 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
               >
                 {latestClosed.status === "completed" ? "View signature certificate" : "View audit trail"}
               </Link>
+              {latestClosed.status === "completed" && (
+                <DownloadSignedPdf envelope={latestClosed} className="btn btn-primary mt-3 w-full px-3 py-1.5" />
+              )}
             </>
           ) : (
             <p className="text-sm text-muted">Not sent for signing yet.</p>

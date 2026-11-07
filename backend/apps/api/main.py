@@ -24,6 +24,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Lets the browser read the file name of downloads (signed PDFs).
+        expose_headers=["Content-Disposition"],
     )
 
     # Include all routes

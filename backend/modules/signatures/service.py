@@ -211,6 +211,24 @@ async def get_certificate(db: AsyncSession, ctx: WorkspaceContext, envelope_id: 
     return (await _serialize(db, [envelope], ctx, with_events=True))[0]
 
 
+async def _signed_copy(db: AsyncSession, envelope: SignatureEnvelope, ctx: Optional[WorkspaceContext]) -> tuple[bytes, str]:
+    from modules.signatures.pdf import build_signed_pdf, signed_filename
+
+    if envelope.status != "completed":
+        raise HTTPException(409, "The signed copy is available once everyone has signed")
+    contract = await db.get(Contract, envelope.contract_id)
+    data = await load_file_bytes(db, contract.id, contract.file_path) if contract else None
+    if data is None or hashlib.sha256(data).hexdigest() != envelope.document_sha256:
+        raise HTTPException(409, "The original document is no longer available, so a signed copy can't be made")
+    record = (await _serialize(db, [envelope], ctx, with_events=True))[0]
+    return build_signed_pdf(record, data), signed_filename(envelope.document_filename)
+
+
+async def signed_copy(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str) -> tuple[bytes, str]:
+    envelope = await _envelope_in_workspace(db, ctx, envelope_id)
+    return await _signed_copy(db, envelope, ctx)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Changing (workspace side)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,6 +426,12 @@ async def public_document(db: AsyncSession, token: str) -> tuple[bytes, str, str
         raise HTTPException(404, "The document is no longer available")
     ext = "." + envelope.document_filename.rsplit(".", 1)[-1].lower() if "." in envelope.document_filename else ""
     return data, CONTENT_TYPES.get(ext, "application/octet-stream"), envelope.document_filename
+
+
+async def public_signed_copy(db: AsyncSession, token: str) -> tuple[bytes, str]:
+    """Each signer can download the signed copy once everyone has signed."""
+    signer, envelope = await _signer_for_token(db, token)
+    return await _signed_copy(db, envelope, None)
 
 
 def _require_open(signer: SignatureSigner, envelope: SignatureEnvelope) -> None:

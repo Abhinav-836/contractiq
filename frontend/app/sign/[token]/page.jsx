@@ -214,7 +214,7 @@ function SignForm({ token, info, onDone }) {
   );
 }
 
-function Outcome({ info }) {
+function Outcome({ info, token }) {
   const me = info.signer;
   const status = info.envelope_status;
   let title, body;
@@ -248,6 +248,11 @@ function Outcome({ info }) {
           </p>
           <p className="mt-2 text-sm text-muted">Signed {formatDateTime(me.acted_at)}</p>
         </div>
+      )}
+      {status === "completed" && (
+        <a href={signingAPI.signedPdfUrl(token)} className="btn btn-primary mt-5 w-full py-2.5">
+          Download the signed PDF
+        </a>
       )}
       {me.status === "declined" && me.decline_reason && (
         <p className="mt-3 rounded-md bg-bg px-3 py-2 text-sm">&ldquo;{me.decline_reason}&rdquo;</p>
@@ -303,7 +308,7 @@ export default function SigningPage() {
             {canAct ? (
               <SignForm token={token} info={info} onDone={(res) => qc.setQueryData(["signing", token], res)} />
             ) : (
-              <Outcome info={info} />
+              <Outcome info={info} token={token} />
             )}
             <section>
               <h2 className="text-sm font-semibold text-muted">Signers</h2>
