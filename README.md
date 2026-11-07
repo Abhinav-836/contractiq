@@ -38,13 +38,13 @@ Analysis runs in the background after upload; the contract shows as *processing*
 - **Obligations** — extracted automatically; filter, edit, mark complete
 - **Alerts** — created for high-risk clauses and high-priority obligations; mark read / read all
 - **Re-analyse** any contract (e.g. after configuring a better model)
-- **Accounts** — register / login with JWT
+- **Accounts** — register / login with JWT; **Account settings** (from the avatar menu) to change your name, sign-in email and password — email and password changes need your current password
 - **Team workspaces** — every account has a personal workspace; create shared ones for a team and switch between them from the header. Contracts, reviews, obligations and alerts belong to a workspace, and everyone in it sees the same ones
 - **Roles** — *owner* (one per workspace), *admin* (invite people, manage members, delete any contract), *member* (upload, re-run reviews, update obligations and alerts, delete their own uploads), *viewer* (read-only)
 - **Approvals** — ask named people in the workspace to sign off a reviewed contract. Every reviewer must approve; one rejection (which needs a reason) sends it back. Reviewers can be any role, viewers included, so someone in finance can approve without being able to edit. The **Approvals** page lists what's waiting for you (with a count in the nav), what you asked for, and everything open; each contract shows its approval status and history
 - **E-signature (built in, free)** — send a reviewed contract to 1–10 people, teammates or outsiders. Each gets a private signing link (no account needed): they read the document, type their full name and tick a consent box, or decline with a reason. Everyone must sign; one decline closes it. Each signature records the time, IP address and browser, and the SHA-256 of the exact file sent is checked again at every signature. When everyone has signed there's a **signature certificate** with the full audit trail, and a **signed PDF** to download — the original pages with a footer naming the signing record, the certificate pages, and the original file attached unchanged so its SHA-256 can be checked. Signers can download it from their link too. The sender or an admin can cancel, or issue a new link if one is lost
-- **Email notifications (optional)** — when email is set up, signers get their private signing link by email (and a new email if a link is reissued), everyone gets the signed PDF attached when the last person signs, the sender hears about a decline with the reason, reviewers are emailed when their approval is needed and the requester when it's decided. Each signer shows *Emailed* or *Email failed*, successful sends appear in the signing audit trail, and links are still shown once so they can also be shared by hand. Sending happens after the change is saved, so a slow or failing email never breaks the action
-- **Invite links** — admins create links that join as a chosen role, expire after 1–30 days and can be limited to a number of people; links can be revoked, and only a hash of each link is stored
+- **Email notifications (optional)** — when email is set up, signers get their private signing link by email (and a new email if a link is reissued), everyone gets the signed PDF attached when the last person signs, the sender hears about a decline with the reason, reviewers are emailed when their approval is needed and the requester when it's decided. Each signer shows *Emailed* or *Email failed*, successful sends appear in the signing audit trail, and links are still shown once so they can also be shared by hand. Sending happens after the change is saved, so a slow or failing email never breaks the action. For a signer who hasn't signed yet, **Email reminder** sends a fresh link with reminder wording (at most once an hour per signer)
+- **Invite links** — admins create links that join as a chosen role, expire after 1–30 days and can be limited to a number of people; links can be revoked, and only a hash of each link is stored. With email set up, a link can also be emailed straight to the person you're inviting
 
 ## Run locally
 
@@ -106,16 +106,16 @@ All routes are under `/api/v1`; everything except register, login and the invite
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
+| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `PATCH /auth/me` (name, email, password) |
 | Contracts | `GET /contracts`, `GET /contracts/stats`, `POST /contracts/upload`, `GET /contracts/{id}`, `POST /contracts/{id}/analyze`, `DELETE /contracts/{id}` |
 | Analysis | `GET /analysis/contract/{contract_id}`, `GET /analysis/{id}` |
 | Obligations | `GET /obligations`, `GET /obligations/stats`, `GET/PATCH/DELETE /obligations/{id}`, `PATCH /obligations/{id}/complete` |
 | Alerts | `GET /alerts`, `GET /alerts/stats`, `PATCH /alerts/{id}/read`, `POST /alerts/mark-all-read`, `DELETE /alerts/{id}` |
 | Workspaces | `GET/POST /workspaces`, `PATCH/DELETE /workspaces/{id}`, `GET /workspaces/{id}/members`, `PATCH/DELETE /workspaces/{id}/members/{user_id}` |
-| Invite links | `GET/POST /workspaces/{id}/invites`, `DELETE /workspaces/{id}/invites/{invite_id}`, `GET /invites/{token}` (public preview), `POST /invites/{token}/accept` |
+| Invite links | `GET/POST /workspaces/{id}/invites` (optional `email` to send it), `DELETE /workspaces/{id}/invites/{invite_id}`, `GET /invites/{token}` (public preview), `POST /invites/{token}/accept` |
 | Approvals | `GET /approvals?scope=waiting\|requested\|all&status=`, `GET /approvals/stats`, `GET/POST /approvals/contract/{contract_id}`, `POST /approvals/{id}/decision`, `POST /approvals/{id}/cancel` |
 | Features | `GET /features` → `{"email": true/false}` (no login) |
-| Signatures | `GET/POST /signatures/contract/{contract_id}`, `GET /signatures/{id}` (certificate + audit trail), `GET /signatures/{id}/signed-pdf`, `POST /signatures/{id}/signers/{signer_id}/link`, `POST /signatures/{id}/cancel` |
+| Signatures | `GET/POST /signatures/contract/{contract_id}`, `GET /signatures/{id}` (certificate + audit trail), `GET /signatures/{id}/signed-pdf`, `POST /signatures/{id}/signers/{signer_id}/link` (`?send_email=false`, `?reminder=true`), `POST /signatures/{id}/cancel` |
 | Signing (public, link token) | `GET /sign/{token}`, `GET /sign/{token}/document`, `GET /sign/{token}/signed-pdf`, `POST /sign/{token}/sign`, `POST /sign/{token}/decline` |
 | Status | `GET /health`, `GET /api/v1/llm/status` (active provider and fallback chain) |
 
@@ -128,7 +128,7 @@ backend/
   apps/api/        FastAPI app, routes, startup
   modules/         users, workspaces, approvals, signatures, notifications, contracts, analysis, obligations, alerts (api / service / repository / models)
   migrations/      Alembic migrations (run automatically on startup)
-  tests/           pytest: workspaces, roles, invites, approvals, signatures, email notifications, access isolation
+  tests/           pytest: workspaces, roles, invites, approvals, signatures, email notifications, account settings, access isolation
   ai/agents/       parser → risk → obligation pipeline
   ai/llm/          Ollama, Gemini, OpenAI, mock clients + provider router
   ai/prompts/      risk analysis prompt (risk.yaml)
@@ -166,7 +166,6 @@ They use a throwaway SQLite database and the mock LLM. To run them against Postg
 - Analysis runs as a background task inside the API process, not a separate worker queue. If the server restarts mid-analysis (common on Render's free tier), that contract is marked failed on startup and needs a re-analyse.
 - Alert read/unread state is shared by everyone in a workspace.
 - Ownership of a workspace can't be transferred yet.
-- Approval requests aren't emailed; reviewers see them in the app (Approvals page and nav count).
 - Re-running a review doesn't reset an earlier approval.
 - Email is optional. Without it, the sender copies the signing links (or uses the "Email it" button, which opens their own mail app). Links are shown once and stored only as a hash, so an email can't be re-sent with an old link — use *New link* instead.
 - On Brevo's free plan, emails carry a small "Sent with Brevo" footer and are capped at 300 a day. Sending from a Gmail address through Brevo can land in spam for some recipients; a verified domain fixes that.

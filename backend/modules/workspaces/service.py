@@ -263,7 +263,8 @@ async def list_invites(db: AsyncSession, ctx: WorkspaceContext) -> list[dict]:
 
 
 async def create_invite(
-    db: AsyncSession, ctx: WorkspaceContext, role: str, expires_in_days: int, max_uses: Optional[int]
+    db: AsyncSession, ctx: WorkspaceContext, role: str, expires_in_days: int, max_uses: Optional[int],
+    email: Optional[str] = None, outbox=None,
 ) -> dict:
     ctx.require("admin", "Only owners and admins can invite people")
     if not can_grant(ctx.role, role):
@@ -282,7 +283,27 @@ async def create_invite(
     db.add(invite)
     await db.commit()
     await db.refresh(invite)
-    return {**_invite_out(invite), "token": token}
+    out = {**_invite_out(invite), "token": token, "emailed_to": None}
+    if email and outbox is not None:
+        from modules.notifications import templates
+        from modules.notifications.service import Email, app_link
+        workspace = await db.get(Workspace, ctx.workspace_id)
+        inviter = await db.get(User, ctx.user_id)
+        inviter_name = (inviter.name if inviter else None) or "A teammate"
+        expires = f"{invite.expires_at.day} {invite.expires_at:%b %Y}"
+        subject, html, text = templates.workspace_invite(
+            inviter_name, workspace.name if workspace else "a workspace", role, app_link(f"/invite/{token}"),
+            f"on {expires}",
+        )
+        before = len(outbox)
+        outbox.add(Email(
+            kind="workspace_invite", to_email=email, to_name=None, subject=subject, html=html, text=text,
+            workspace_id=ctx.workspace_id, reply_to=inviter.email if inviter else None,
+            ref_type="workspace_invite", ref_id=invite.id,
+        ))
+        if len(outbox) > before:
+            out["emailed_to"] = email
+    return out
 
 
 async def revoke_invite(db: AsyncSession, ctx: WorkspaceContext, invite_id: str) -> None:

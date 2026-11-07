@@ -65,6 +65,7 @@ export const authAPI = {
   login: (email, password) => data(api.post("/auth/login", { email, password })),
   register: (body) => data(api.post("/auth/register", body)),
   me: () => data(api.get("/auth/me")),
+  updateMe: (body) => data(api.patch("/auth/me", body)),
 };
 
 export const contractsAPI = {
@@ -141,6 +142,8 @@ export const signaturesAPI = {
   get: (id) => data(api.get(`/signatures/${id}`)),
   newLink: (id, signerId, sendEmail = true) =>
     data(api.post(`/signatures/${id}/signers/${signerId}/link`, null, { params: { send_email: sendEmail } })),
+  remind: (id, signerId) =>
+    data(api.post(`/signatures/${id}/signers/${signerId}/link`, null, { params: { reminder: true } })),
   cancel: (id) => data(api.post(`/signatures/${id}/cancel`)),
   signedPdf: (id) => api.get(`/signatures/${id}/signed-pdf`, { responseType: "blob", timeout: 120000 }),
 };

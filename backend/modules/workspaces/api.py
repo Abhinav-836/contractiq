@@ -1,10 +1,11 @@
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db
 from core.security import require_auth
+from modules.notifications.service import Outbox, deliver
 from modules.workspaces import service
 from modules.workspaces.deps import workspace_from_path
 from modules.workspaces.permissions import WorkspaceContext
@@ -104,10 +105,15 @@ async def list_invites(
 @router.post("/{workspace_id}/invites", response_model=InviteCreated, status_code=201)
 async def create_invite(
     body: InviteCreate,
+    background: BackgroundTasks,
     ctx: WorkspaceContext = Depends(workspace_from_path),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.create_invite(db, ctx, body.role, body.expires_in_days, body.max_uses)
+    outbox = Outbox() if body.email else None
+    out = await service.create_invite(db, ctx, body.role, body.expires_in_days, body.max_uses, body.email, outbox)
+    if outbox:  # create_invite has already committed
+        background.add_task(deliver, outbox)
+    return out
 
 
 @router.delete("/{workspace_id}/invites/{invite_id}")

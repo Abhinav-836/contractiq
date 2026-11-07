@@ -102,6 +102,14 @@ function UserMenu({ user }) {
             <p className="truncate text-sm text-muted">{user?.email}</p>
           </div>
           <div className="my-1 border-t border-rule" />
+          <Link
+            href="/settings"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-bg"
+          >
+            Account settings
+          </Link>
           <button type="button" role="menuitem" onClick={signOut} className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-bg">
             Sign out
           </button>

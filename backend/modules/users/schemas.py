@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -10,6 +11,14 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    email: Optional[EmailStr] = None
+    new_password: Optional[str] = Field(None, min_length=8, max_length=128)
+    # Required to change the email or password.
+    current_password: Optional[str] = Field(None, max_length=128)
 
 
 class UserOut(BaseModel):

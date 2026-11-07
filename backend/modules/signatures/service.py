@@ -21,7 +21,7 @@ import hashlib
 import ipaddress
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, Request
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from modules.contracts.models import Contract
 from modules.contracts.service import load_file_bytes
 from modules.notifications import templates
+from modules.notifications.mailer import is_enabled as is_email_enabled
 from modules.notifications.service import Email, Outbox, app_link, latest_status
 from modules.signatures.models import SignatureEnvelope, SignatureEvent, SignatureSigner
 from modules.users.models import User
@@ -52,6 +53,11 @@ CONTENT_TYPES = {
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _aware(dt: datetime) -> datetime:
+    # SQLite returns naive datetimes; treat them as UTC.
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def hash_token(token: str) -> str:
@@ -266,16 +272,17 @@ def _require_manager(ctx: WorkspaceContext, envelope: SignatureEnvelope) -> None
 
 
 def _queue_link_email(outbox: Optional[Outbox], envelope: SignatureEnvelope, signer: SignatureSigner,
-                      token: str, requester: Optional[User], reissued: bool = False) -> None:
+                      token: str, requester: Optional[User], reissued: bool = False, reminder: bool = False) -> None:
     if outbox is None:
         return
     requester_name = requester.name if requester else "Someone"
     subject, html, text = templates.signature_request(
         signer.name, requester_name, envelope.document_filename, envelope.message,
-        app_link(f"/sign/{token}"), reissued=reissued,
+        app_link(f"/sign/{token}"), reissued=reissued, reminder=reminder,
     )
     outbox.add(Email(
-        kind="signature_link" if reissued else "signature_request", to_email=signer.email, to_name=signer.name,
+        kind="signature_reminder" if reminder else "signature_link" if reissued else "signature_request",
+        to_email=signer.email, to_name=signer.name,
         subject=subject, html=html, text=text, workspace_id=envelope.workspace_id,
         reply_to=requester.email if requester else None,
         ref_type="signature_signer", ref_id=signer.id, signature_envelope_id=envelope.id,
@@ -351,8 +358,11 @@ async def create_envelope(db: AsyncSession, ctx: WorkspaceContext, contract_id: 
     return out
 
 
+REMINDER_GAP = timedelta(hours=1)
+
+
 async def reissue_link(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str, signer_id: str,
-                       request: Optional[Request], outbox: Optional[Outbox] = None) -> dict:
+                       request: Optional[Request], outbox: Optional[Outbox] = None, reminder: bool = False) -> dict:
     envelope = await _envelope_in_workspace(db, ctx, envelope_id, lock=True)
     _require_manager(ctx, envelope)
     signer = await db.get(SignatureSigner, signer_id)
@@ -360,16 +370,23 @@ async def reissue_link(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str
         raise HTTPException(404, "Signer not found")
     if signer.status != "pending":
         raise HTTPException(409, f"{signer.name} has already {signer.status}")
+    if reminder:
+        if outbox is None or not is_email_enabled():
+            raise HTTPException(409, "Email isn't set up, so reminders can't be sent. Use New link and share it yourself.")
+        last = (await latest_status(db, "signature_signer", [signer.id])).get(signer.id)
+        if last and last["status"] == "sent" and last["at"] and _aware(last["at"]) > utcnow() - REMINDER_GAP:
+            raise HTTPException(429, f"{signer.name} was emailed less than an hour ago. Try again later.")
     token = secrets.token_urlsafe(32)
     signer.token_hash = hash_token(token)
     actor = await db.get(User, ctx.user_id)
     ip, ua = client_info(request)
     _event(db, envelope.id, "link_reissued", actor.name if actor else None,
-           f"New signing link for {signer.name}; the old one no longer works", ip, ua)
+           f"{'Reminder with a new' if reminder else 'New'} signing link for {signer.name}; the old one no longer works",
+           ip, ua)
     await db.flush()
     # The email names whoever originally sent the document (an admin may be reissuing it).
     sender = await db.get(User, envelope.requested_by) if envelope.requested_by else None
-    _queue_link_email(outbox, envelope, signer, token, sender or actor, reissued=True)
+    _queue_link_email(outbox, envelope, signer, token, sender or actor, reissued=True, reminder=reminder)
     out = (await _serialize(db, [envelope], ctx))[0]
     out["links"] = {signer.id: token}
     out["emailed"] = bool(outbox)

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage, workspacesAPI } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import { useActiveWorkspace, useInvites, useMembers, useWorkspaceMutation } from "@/lib/queries";
+import { useActiveWorkspace, useFeatures, useInvites, useMembers, useWorkspaceMutation } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { ROLE_HELP, ROLE_LABELS, setWorkspaceId } from "@/lib/workspace";
 import { ConfirmDelete } from "@/components/Modal";
@@ -204,8 +204,10 @@ function Invites({ workspace, myRole }) {
   const create = useWorkspaceMutation((body) => workspacesAPI.createInvite(workspace.id, body));
   const revoke = useWorkspaceMutation((id) => workspacesAPI.revokeInvite(workspace.id, id));
   const roles = grantable(myRole);
-  const [form, setForm] = useState({ role: "member", expires_in_days: 7, max_uses: "" });
-  const [link, setLink] = useState(null); // { url, role } — the token is shown only once
+  const { data: features } = useFeatures();
+  const emailOn = Boolean(features?.email);
+  const [form, setForm] = useState({ role: "member", expires_in_days: 7, max_uses: "", email: "" });
+  const [link, setLink] = useState(null); // { url, role, emailedTo } — the token is shown only once
   const [copied, setCopied] = useState(false);
 
   const submit = async (e) => {
@@ -215,8 +217,13 @@ function Invites({ workspace, myRole }) {
         role: form.role,
         expires_in_days: Number(form.expires_in_days),
         max_uses: form.max_uses === "" ? null : Number(form.max_uses),
+        email: emailOn && form.email.trim() ? form.email.trim() : null,
       });
-      setLink({ url: `${window.location.origin}/invite/${inv.token}`, role: inv.role });
+      setLink({ url: `${window.location.origin}/invite/${inv.token}`, role: inv.role, emailedTo: inv.emailed_to });
+      if (inv.emailed_to) {
+        toast(`Invite emailed to ${inv.emailed_to}.`, "success");
+        setForm((f) => ({ ...f, email: "" }));
+      }
       setCopied(false);
     } catch (err) {
       toast(errorMessage(err, "Couldn't create the invite link."), "error");
@@ -281,8 +288,24 @@ function Invites({ workspace, myRole }) {
             ))}
           </select>
         </div>
+        {emailOn && (
+          <div className="sm:col-span-3">
+            <label htmlFor="inv-email" className="mb-1.5 block text-sm font-medium">
+              Email it to <span className="font-normal text-faint">(optional)</span>
+            </label>
+            <input
+              id="inv-email"
+              type="email"
+              className="field w-full"
+              placeholder="name@company.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              autoComplete="off"
+            />
+          </div>
+        )}
         <button type="submit" className="btn btn-primary" disabled={create.isPending}>
-          {create.isPending && <Spinner />} Create link
+          {create.isPending && <Spinner />} {emailOn && form.email.trim() ? "Create and email" : "Create link"}
         </button>
       </form>
       <p className="mt-2 text-sm text-faint">{ROLE_HELP[form.role]}</p>
@@ -290,7 +313,9 @@ function Invites({ workspace, myRole }) {
       {link && (
         <div className="mt-4 rounded-lg border border-pen/40 bg-bg p-3">
           <p className="text-sm font-medium">
-            New {ROLE_LABELS[link.role].toLowerCase()} link. Copy it now: it won&apos;t be shown again.
+            New {ROLE_LABELS[link.role].toLowerCase()} link.{" "}
+            {link.emailedTo ? `Emailed to ${link.emailedTo}. You can also copy it now: ` : "Copy it now: "}
+            it won&apos;t be shown again.
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <label htmlFor="inv-link" className="sr-only">

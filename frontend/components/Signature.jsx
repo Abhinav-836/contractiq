@@ -373,6 +373,9 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
   const [links, setLinks] = useState(null);
   const cancel = useSignatureMutation((id) => signaturesAPI.cancel(id));
   const reissue = useSignatureMutation(({ id, signerId }) => signaturesAPI.newLink(id, signerId));
+  const remind = useSignatureMutation(({ id, signerId }) => signaturesAPI.remind(id, signerId));
+  const { data: features } = useFeatures();
+  const emailOn = Boolean(features?.email);
 
   const open = envelopes[0]?.status === "pending" ? envelopes[0] : null;
   const latestClosed = open ? null : envelopes.find((e) => e.status !== "cancelled") || null;
@@ -396,6 +399,15 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
       toast(errorMessage(err, "Couldn't make a new link."), "error");
     }
   };
+  const sendReminder = async (signer) => {
+    try {
+      await remind.mutateAsync({ id: open.id, signerId: signer.id });
+      track("signature_reminder_sent");
+      toast(`Reminder emailed to ${signer.name} with a fresh link.`, "success");
+    } catch (err) {
+      toast(errorMessage(err, "Couldn't send the reminder."), "error");
+    }
+  };
 
   return (
     <section aria-labelledby="signatures">
@@ -417,14 +429,27 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
             {open.signers.map((s) => (
               <SignerRow key={s.id} s={s} showEmail>
                 {open.can_manage && s.status === "pending" && (
-                  <button
-                    type="button"
-                    className="ml-5 mt-0.5 text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
-                    onClick={() => newLink(s)}
-                    disabled={reissue.isPending}
-                  >
-                    New link
-                  </button>
+                  <div className="ml-5 mt-0.5 flex flex-wrap gap-x-3">
+                    {emailOn && (
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-pen underline-offset-4 hover:underline"
+                        onClick={() => sendReminder(s)}
+                        disabled={remind.isPending}
+                        title="Email a fresh link as a reminder (at most once an hour)"
+                      >
+                        Email reminder
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
+                      onClick={() => newLink(s)}
+                      disabled={reissue.isPending}
+                    >
+                      New link
+                    </button>
+                  </div>
                 )}
               </SignerRow>
             ))}

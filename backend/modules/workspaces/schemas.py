@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, EmailStr
 
 AssignableRole = Literal["admin", "member", "viewer"]
 
@@ -53,6 +53,8 @@ class InviteCreate(BaseModel):
     role: AssignableRole = "member"
     expires_in_days: int = Field(7, ge=1, le=30)
     max_uses: Optional[int] = Field(None, ge=1, le=100)
+    # Optional: email the invite link to this address (when email is set up).
+    email: Optional[EmailStr] = None
 
 
 class InviteOut(BaseModel):
@@ -67,6 +69,7 @@ class InviteOut(BaseModel):
 
 class InviteCreated(InviteOut):
     token: str  # shown once
+    emailed_to: Optional[str] = None  # set when an invite email was queued
 
 
 class InvitePreview(BaseModel):

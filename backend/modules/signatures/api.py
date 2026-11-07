@@ -79,12 +79,13 @@ async def new_link(
     request: Request,
     background: BackgroundTasks,
     send_email: bool = Query(True, description="Email the new link to the signer (when email is set up)"),
+    reminder: bool = Query(False, description="Send it as a reminder (needs email; at most once an hour per signer)"),
     ctx: WorkspaceContext = Depends(current_workspace),
     db: AsyncSession = Depends(get_db),
 ):
     """Replace a signer's link (e.g. it was lost or sent to the wrong person)."""
-    outbox = Outbox() if send_email else None
-    out = await service.reissue_link(db, ctx, envelope_id, signer_id, request, outbox)
+    outbox = Outbox() if (send_email or reminder) else None
+    out = await service.reissue_link(db, ctx, envelope_id, signer_id, request, outbox, reminder=reminder)
     if outbox:
         await db.commit()  # emails refer to these rows; save them before the background send
         background.add_task(deliver, outbox)

@@ -38,12 +38,15 @@ def _text(lines: list[str]) -> str:
 
 # ── Signatures ────────────────────────────────────────────────────────────
 
-def signature_request(signer_name, requester_name, filename, message, url, reissued=False):
+def signature_request(signer_name, requester_name, filename, message, url, reissued=False, reminder=False):
     e = escape
-    subject = f"{'New signing link' if reissued else 'Please sign'}: {filename}"
+    subject = f"{'Reminder: please sign' if reminder else 'New signing link' if reissued else 'Please sign'}: {filename}"
     heading = e(f"{requester_name} asked you to sign {filename}")
     paras = [f"Hi {e(signer_name)},"]
-    if reissued:
+    if reminder:
+        paras.append(f"A reminder that <strong>{e(requester_name)}</strong> is waiting for your signature on "
+                     f"<strong>{e(filename)}</strong>. Here is a fresh link — any earlier link no longer works.")
+    elif reissued:
         paras.append("Here is a new signing link. Any earlier link for this document no longer works.")
     else:
         paras.append(f"<strong>{e(requester_name)}</strong> has asked you to review and sign "
@@ -57,6 +60,8 @@ def signature_request(signer_name, requester_name, filename, message, url, reiss
     html = _layout(heading, paras, ("Review and sign", url), footer)
     text = _text([
         f"Hi {signer_name},",
+        f"A reminder that {requester_name} is waiting for your signature on \"{filename}\". "
+        "Here is a fresh link; any earlier link no longer works." if reminder else
         "Here is a new signing link. Any earlier link no longer works." if reissued
         else f"{requester_name} has asked you to review and sign \"{filename}\". You don't need an account.",
         f"Message: {message}" if message else "",
@@ -140,4 +145,22 @@ def approval_decided(requester_name, filename, status, decided_by, comment, url)
                   else f"{decided_by} rejected \"{filename}\".",
                   f"Reason: {comment}" if (comment and not approved) else "",
                   f"Open the contract: {url}"])
+    return subject, html, text
+
+
+# ── Team invites ──────────────────────────────────────────────────────────
+
+def workspace_invite(inviter_name, workspace_name, role, url, expires_label):
+    e = escape
+    role_label = {"admin": "an admin", "member": "a member", "viewer": "a viewer"}.get(role, role)
+    subject = f"{inviter_name} invited you to {workspace_name} on ContractIQ"
+    paras = [f"<strong>{e(inviter_name)}</strong> invited you to join <strong>{e(workspace_name)}</strong> "
+             f"on ContractIQ as {e(role_label)}.",
+             "ContractIQ reviews contracts with AI and lets a team approve and sign them together. "
+             "Accept the invite to create an account (or sign in) and join.",
+             f"The invite expires {e(expires_label)}."]
+    html = _layout(e(f"Join {workspace_name} on ContractIQ"), paras, ("Accept invite", url),
+                   "If you weren't expecting this, you can ignore it — nothing happens unless you accept.")
+    text = _text([f"{inviter_name} invited you to join \"{workspace_name}\" on ContractIQ as {role_label}.",
+                  f"Accept the invite: {url}", f"The invite expires {expires_label}."])
     return subject, html, text
