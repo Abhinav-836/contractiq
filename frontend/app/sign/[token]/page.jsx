@@ -11,7 +11,7 @@ import { Loading, Spinner } from "@/components/States";
 
 const norm = (s) => (s || "").trim().replace(/\s+/g, " ").toLowerCase();
 
-function Progress({ signers }) {
+function Progress({ signers, closed }) {
   return (
     <ul className="mt-2 space-y-1.5 text-sm">
       {signers.map((s, i) => (
@@ -26,7 +26,7 @@ function Progress({ signers }) {
             {s.name}
             {s.is_you && <span className="text-faint"> (you)</span>}
           </span>
-          <span className="shrink-0 text-faint">{s.status === "pending" ? "Waiting" : s.status === "signed" ? "Signed" : "Declined"}</span>
+          <span className="shrink-0 text-faint">{s.status === "pending" ? (closed ? "Not signed" : "Waiting") : s.status === "signed" ? "Signed" : "Declined"}</span>
         </li>
       ))}
     </ul>
@@ -307,7 +307,7 @@ export default function SigningPage() {
             )}
             <section>
               <h2 className="text-sm font-semibold text-muted">Signers</h2>
-              <Progress signers={info.signers} />
+              <Progress signers={info.signers} closed={info.envelope_status !== "pending"} />
             </section>
             <p className="break-all text-xs text-faint">Document SHA-256: {info.document_sha256}</p>
           </div>

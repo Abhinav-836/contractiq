@@ -223,3 +223,19 @@ async def test_other_workspace_cannot_reach_envelope(make_user, db):
     # Mallory's personal workspace
     assert (await mallory.get(f"{API}/signatures/{env['id']}")).status_code == 404
     assert (await mallory.post(f"{API}/signatures/{env['id']}/cancel")).status_code == 404
+
+
+def test_client_ip_skips_cloudflare_and_private_hops():
+    from types import SimpleNamespace
+    from modules.signatures.service import client_info
+
+    def req(headers):
+        return SimpleNamespace(headers={k.lower(): v for k, v in headers.items()}, client=SimpleNamespace(host="10.0.0.9"))
+
+    # What Render produced live: visitor, then a Cloudflare edge, then an internal hop
+    xff = {"X-Forwarded-For": "1.2.3.4, 49.36.10.20, 104.23.160.38, 10.0.0.1"}
+    assert client_info(req(xff))[0] == "49.36.10.20"
+    # Cloudflare's own header wins when present
+    assert client_info(req({**xff, "CF-Connecting-IP": "49.36.99.1"}))[0] == "49.36.99.1"
+    assert client_info(req({"X-Forwarded-For": "172.69.94.197"}))[0] == "172.69.94.197"  # nothing better available
+    assert client_info(req({}))[0] == "10.0.0.9"

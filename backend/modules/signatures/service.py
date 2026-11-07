@@ -60,22 +60,46 @@ def normalize_name(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip()).casefold()
 
 
+# Cloudflare's edge ranges (https://www.cloudflare.com/ips/). Render sits behind
+# Cloudflare, so these show up in X-Forwarded-For and must be skipped.
+CLOUDFLARE_NETWORKS = [ipaddress.ip_network(n) for n in (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "141.101.64.0/18",
+    "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22", "198.41.128.0/17",
+    "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32",
+    "2a06:98c0::/29", "2c0f:f248::/32",
+)]
+
+
+def _is_proxy(ip) -> bool:
+    return not ip.is_global or any(ip.version == n.version and ip in n for n in CLOUDFLARE_NETWORKS)
+
+
 def client_info(request: Optional[Request]) -> tuple[Optional[str], Optional[str]]:
     """
-    Caller's IP and browser. Behind Render/Vercel the real address is in
-    X-Forwarded-For; walk it from the right (entries added by our proxies) and
-    take the first public address, so a client can't simply prepend a fake one.
+    Caller's IP and browser.
+
+    Render is behind Cloudflare, which puts the visitor's address in
+    CF-Connecting-IP (overwriting anything the visitor sends). Otherwise walk
+    X-Forwarded-For from the right, skipping private and Cloudflare addresses
+    (added by the proxies), so a client can't simply prepend a fake one.
     """
     if request is None:
         return None, None
     ua = (request.headers.get("user-agent") or "")[:400] or None
     chain = [p.strip() for p in (request.headers.get("x-forwarded-for") or "").split(",") if p.strip()]
+    cf = (request.headers.get("cf-connecting-ip") or "").strip()
+    if cf:
+        try:
+            return str(ipaddress.ip_address(cf)), ua
+        except ValueError:
+            pass
     for candidate in reversed(chain):
         try:
             ip = ipaddress.ip_address(candidate)
         except ValueError:
             continue
-        if ip.is_global:
+        if not _is_proxy(ip):
             return str(ip), ua
     host = request.client.host if request.client else None
     return (chain[-1] if chain else host), ua
