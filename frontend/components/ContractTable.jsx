@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ApprovalBadge } from "./Approval";
+import { SignatureBadge } from "./Signature";
 import { fileKind, fileSize, STATUS, timeAgo } from "@/lib/format";
 import { RiskChip } from "./Risk";
 import { Spinner } from "./States";
@@ -35,6 +36,7 @@ export default function ContractTable({ contracts, onDelete, canDelete = () => t
                 {fileKind(c)}, {fileSize(c.file_size)}, uploaded {timeAgo(c.created_at)}
               </span>
               <ApprovalBadge status={c.approval_status} />
+              <SignatureBadge status={c.signature_status} />
             </p>
           </div>
           <div className="shrink-0 text-right">

@@ -99,7 +99,10 @@ class ContractRepository:
 
         from modules.approvals.service import delete_for_contract
 
+        from modules.signatures.service import delete_for_contract as delete_signatures
+
         await delete_for_contract(self.db, contract_id)
+        await delete_signatures(self.db, contract_id)
         for model in (Analysis, Obligation, Alert, ContractFile):
             await self.db.execute(delete(model).where(model.contract_id == contract_id))
         await self.db.execute(delete(Contract).where(Contract.id == contract_id))

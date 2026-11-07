@@ -10,9 +10,11 @@ api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   // Scope data requests to the selected workspace. /workspaces/{id}/... routes
-  // name their workspace in the path instead.
+  // name their workspace in the path instead; invite and signing links aren't
+  // tied to whichever workspace the visitor has selected.
   const workspaceId = getWorkspaceId();
-  if (workspaceId && !(config.url || "").startsWith("/workspaces") && !(config.url || "").startsWith("/invites")) {
+  const url = config.url || "";
+  if (workspaceId && !["/workspaces", "/invites", "/sign/"].some((p) => url.startsWith(p))) {
     config.headers["X-Workspace-Id"] = workspaceId;
   }
   return config;
@@ -129,6 +131,26 @@ export const approvalsAPI = {
   decide: (id, decision, comment) => data(api.post(`/approvals/${id}/decision`, { decision, comment })),
   cancel: (id) => data(api.post(`/approvals/${id}/cancel`)),
 };
+
+export const signaturesAPI = {
+  forContract: (contractId) => data(api.get(`/signatures/contract/${contractId}`)),
+  send: (contractId, body) => data(api.post(`/signatures/contract/${contractId}`, body)),
+  get: (id) => data(api.get(`/signatures/${id}`)),
+  newLink: (id, signerId) => data(api.post(`/signatures/${id}/signers/${signerId}/link`)),
+  cancel: (id) => data(api.post(`/signatures/${id}/cancel`)),
+};
+
+/** Public signing routes: no account needed, the token in the link is the key. */
+export const signingAPI = {
+  get: (token) => data(api.get(`/sign/${encodeURIComponent(token)}`)),
+  documentUrl: (token) => `${API_URL}/api/v1/sign/${encodeURIComponent(token)}/document`,
+  sign: (token, body) => data(api.post(`/sign/${encodeURIComponent(token)}/sign`, body)),
+  decline: (token, reason) => data(api.post(`/sign/${encodeURIComponent(token)}/decline`, { reason })),
+};
+
+/** Where a signer opens their link. */
+export const signingLink = (token) =>
+  `${typeof window !== "undefined" ? window.location.origin : ""}/sign/${encodeURIComponent(token)}`;
 
 export const invitesAPI = {
   preview: (token) => data(api.get(`/invites/${encodeURIComponent(token)}`)),

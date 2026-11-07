@@ -21,6 +21,8 @@ class Contract(Base):
     # Latest approval outcome: None (never requested) | pending | approved | rejected.
     # Kept in sync by modules/approvals/service.py so lists don't need a join.
     approval_status = Column(String, nullable=True, index=True)
+    # Latest signing outcome: None | pending | completed | declined (modules/signatures/service.py)
+    signature_status = Column(String, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),

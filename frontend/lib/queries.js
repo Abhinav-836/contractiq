@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { alertsAPI, analysisAPI, approvalsAPI, contractsAPI, obligationsAPI, workspacesAPI } from "./api";
+import { alertsAPI, analysisAPI, approvalsAPI, contractsAPI, obligationsAPI, signaturesAPI, workspacesAPI } from "./api";
 import { useSession } from "./session";
 import { useWorkspaceId } from "./workspace";
 
@@ -205,6 +205,27 @@ export const useContractApprovals = (contractId, enabled = true) =>
     queryFn: () => approvalsAPI.forContract(contractId),
     enabled: Boolean(contractId) && enabled,
   });
+
+export const useContractSignatures = (contractId, enabled = true) =>
+  useQuery({
+    queryKey: ["contractSignatures", contractId],
+    queryFn: () => signaturesAPI.forContract(contractId),
+    enabled: Boolean(contractId) && enabled,
+    // Outside signers act without the app knowing, so check now and then while one is open.
+    refetchInterval: (q) => (q.state.data?.[0]?.status === "pending" ? 30_000 : false),
+  });
+
+export const useSignatureCertificate = (id) =>
+  useQuery({ queryKey: ["signature", id], queryFn: () => signaturesAPI.get(id), enabled: Boolean(id) });
+
+export function useSignatureMutation(fn) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () =>
+      ["contractSignatures", "signature", "contracts", "contract"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+  });
+}
 
 /** Anything that changes an approval also changes badges, lists and the contract's status. */
 export function useApprovalMutation(fn) {
