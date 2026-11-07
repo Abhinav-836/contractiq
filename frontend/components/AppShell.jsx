@@ -6,9 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { authAPI } from "@/lib/api";
 import { clearSession, saveSession, useSession } from "@/lib/session";
-import { useAlertStats } from "@/lib/queries";
+import { useActiveWorkspace, useAlertStats } from "@/lib/queries";
 import { toast } from "@/lib/toast";
+import { setWorkspaceId } from "@/lib/workspace";
 import Logo from "./Logo";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import SignatureFooter from "./SignatureFooter";
 import { Spinner } from "./States";
 
@@ -17,7 +19,36 @@ const NAV = [
   { href: "/contracts", label: "Contracts" },
   { href: "/obligations", label: "Obligations" },
   { href: "/alerts", label: "Alerts", badge: "alerts" },
+  { href: "/team", label: "Team" },
 ];
+
+/**
+ * Data is cached per workspace only implicitly, so when the selected workspace
+ * changes (switcher, invite accepted, or the old one disappeared) everything
+ * except the workspace list is refetched.
+ */
+function useWorkspaceSync() {
+  const qc = useQueryClient();
+  const { workspaces, storedId, isLoading, isFetching } = useActiveWorkspace();
+  const previous = useRef(storedId);
+
+  useEffect(() => {
+    if (previous.current === storedId) return;
+    previous.current = storedId;
+    qc.resetQueries({ predicate: (q) => q.queryKey[0] !== "workspaces" });
+    qc.invalidateQueries({ queryKey: ["workspaces"] });
+  }, [storedId, qc]);
+
+  // Removed from the stored workspace (or it was deleted) → back to personal.
+  // Only judged on a settled list: right after creating or joining a
+  // workspace, a refetch is still on its way.
+  useEffect(() => {
+    if (!isLoading && !isFetching && storedId && workspaces.length && !workspaces.some((w) => w.id === storedId)) {
+      setWorkspaceId(null);
+      toast("You no longer have access to that workspace.");
+    }
+  }, [isLoading, isFetching, storedId, workspaces]);
+}
 
 function UserMenu({ user }) {
   const router = useRouter();
@@ -84,6 +115,8 @@ export default function AppShell({ children }) {
   const router = useRouter();
   const pathname = usePathname() || "";
   const { data: alertStats } = useAlertStats(Boolean(session?.token));
+  const { active, canEdit } = useActiveWorkspace();
+  useWorkspaceSync();
 
   // Guard: send signed-out visitors to sign in, then back here.
   useEffect(() => {
@@ -137,14 +170,22 @@ export default function AppShell({ children }) {
               );
             })}
           </nav>
-          <div className="ml-auto flex h-14 items-center gap-3">
-            <Link href="/contracts/upload" className="btn btn-primary hidden px-3 py-1.5 sm:inline-flex">
-              Upload contract
-            </Link>
+          <div className="ml-auto flex h-14 min-w-0 items-center gap-3">
+            <WorkspaceSwitcher />
+            {canEdit && (
+              <Link href="/contracts/upload" className="btn btn-primary hidden px-3 py-1.5 sm:inline-flex">
+                Upload contract
+              </Link>
+            )}
             <UserMenu user={session.user} />
           </div>
         </div>
       </header>
+      {active && !canEdit && (
+        <p role="status" className="no-print border-b border-rule bg-bg px-4 py-2 text-center text-sm text-muted">
+          You have view-only access to <span className="font-semibold text-ink">{active.name}</span>.
+        </p>
+      )}
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         {children}
       </main>

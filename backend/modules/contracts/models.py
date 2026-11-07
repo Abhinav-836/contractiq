@@ -15,7 +15,9 @@ class Contract(Base):
     status = Column(String, default="processing", nullable=False, index=True)
     risk_level = Column(String, nullable=True, index=True)
     extracted_text = Column(Text, nullable=True)
+    # Who uploaded it. Access is decided by workspace_id, not by this.
     user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),

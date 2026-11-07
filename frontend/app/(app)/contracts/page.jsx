@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useContracts, useDeleteContract } from "@/lib/queries";
+import { useActiveWorkspace, useContracts, useDeleteContract } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
@@ -21,6 +21,9 @@ function ContractsList() {
 
   const { data: contracts = [], isLoading, error, refetch } = useContracts({ limit: 100 });
   const del = useDeleteContract();
+  const { canEdit, canAdmin, userId } = useActiveWorkspace();
+  // Members may delete only what they uploaded; admins and owners anything.
+  const canDelete = (c) => canAdmin || (canEdit && c.user_id === userId);
 
   const counts = useMemo(() => {
     const c = { all: contracts.length, high: 0, medium: 0, low: 0, processing: 0, failed: 0 };
@@ -67,9 +70,11 @@ function ContractsList() {
   return (
     <div className="space-y-8">
       <PageHead title="Contracts" sub={isLoading ? "\u00a0" : `${contracts.length} contract${contracts.length === 1 ? "" : "s"} reviewed or in review`}>
-        <Link href="/contracts/upload" className="btn btn-primary">
-          Upload contract
-        </Link>
+        {canEdit && (
+          <Link href="/contracts/upload" className="btn btn-primary">
+            Upload contract
+          </Link>
+        )}
       </PageHead>
 
       {isLoading ? (
@@ -77,7 +82,11 @@ function ContractsList() {
       ) : error ? (
         <ErrorNote message={errorMessage(error, "Couldn't load your contracts.")} onRetry={refetch} />
       ) : contracts.length === 0 ? (
-        <Empty title="No contracts yet" body="Upload a PDF, Word or text contract. Its review appears here in about a minute." action="Upload a contract" href="/contracts/upload" />
+        canEdit ? (
+          <Empty title="No contracts yet" body="Upload a PDF, Word or text contract. Its review appears here in about a minute." action="Upload a contract" href="/contracts/upload" />
+        ) : (
+          <Empty title="No contracts yet" body="Nobody has uploaded a contract to this workspace yet." />
+        )
       ) : (
         <>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -88,7 +97,7 @@ function ContractsList() {
             </label>
           </div>
           {shown.length ? (
-            <ContractTable contracts={shown} onDelete={setToDelete} />
+            <ContractTable contracts={shown} onDelete={setToDelete} canDelete={canDelete} />
           ) : (
             <p className="rounded-xl border border-dashed border-rule bg-page px-6 py-10 text-center text-muted">
               No contracts match {query ? <>&ldquo;{query}&rdquo;</> : "this filter"}.

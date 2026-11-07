@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAlerts, useAlertStats, useContracts, useContractStats, useObligations, useObligationStats } from "@/lib/queries";
+import { useActiveWorkspace, useAlerts, useAlertStats, useContracts, useContractStats, useObligations, useObligationStats } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { formatDue, dueSortKey } from "@/lib/format";
 import ContractTable from "@/components/ContractTable";
@@ -24,6 +24,7 @@ const greeting = () => {
 
 export default function Dashboard() {
   const session = useSession();
+  const { canEdit } = useActiveWorkspace();
   const contracts = useContracts({ limit: 6 });
   const cStats = useContractStats();
   const oStats = useObligationStats();
@@ -56,9 +57,11 @@ export default function Dashboard() {
               : "\u00a0"}
           </p>
         </div>
-        <Link href="/contracts/upload" className="btn btn-primary self-start sm:hidden">
-          Upload contract
-        </Link>
+        {canEdit && (
+          <Link href="/contracts/upload" className="btn btn-primary self-start sm:hidden">
+            Upload contract
+          </Link>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -128,7 +131,11 @@ export default function Dashboard() {
             ) : contracts.error ? (
               <ErrorNote message="Couldn't load your contracts." onRetry={() => contracts.refetch()} />
             ) : contracts.data.length === 0 ? (
-              <Empty title="No contracts yet" body="Upload a PDF, Word or text contract and the review appears in about a minute." action="Upload a contract" href="/contracts/upload" />
+              canEdit ? (
+                <Empty title="No contracts yet" body="Upload a PDF, Word or text contract and the review appears in about a minute." action="Upload a contract" href="/contracts/upload" />
+              ) : (
+                <Empty title="No contracts yet" body="Nobody has uploaded a contract to this workspace yet." />
+              )
             ) : (
               <ContractTable contracts={contracts.data} />
             )}

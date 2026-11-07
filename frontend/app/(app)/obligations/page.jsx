@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useCompleteObligation, useContracts, useObligations, useReopenObligation } from "@/lib/queries";
+import { useActiveWorkspace, useCompleteObligation, useContracts, useObligations, useReopenObligation } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { dueSortKey, formatDue } from "@/lib/format";
 import { toast } from "@/lib/toast";
@@ -17,6 +17,7 @@ export default function ObligationsPage() {
   const { data: contracts = [] } = useContracts({ limit: 100 });
   const complete = useCompleteObligation();
   const reopen = useReopenObligation();
+  const { canEdit } = useActiveWorkspace();
   const [filter, setFilter] = useState("open");
   const [sort, setSort] = useState("due");
 
@@ -112,6 +113,7 @@ export default function ObligationsPage() {
                     <input
                       type="checkbox"
                       checked={done}
+                      disabled={!canEdit}
                       onChange={() => toggle(o)}
                       aria-label={`${done ? "Reopen" : "Mark done"}: ${o.description || o.title}`}
                       className="mt-1 h-[1.1rem] w-[1.1rem] shrink-0 accent-[var(--pen)]"

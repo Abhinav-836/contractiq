@@ -5,8 +5,9 @@ from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db
-from core.security import require_auth
-from modules.contracts.repository import owned_contract_ids
+from modules.contracts.repository import workspace_contract_ids
+from modules.workspaces.deps import current_workspace, editable_workspace
+from modules.workspaces.permissions import WorkspaceContext
 from .models import Obligation
 from .schemas import ObligationOut, ObligationUpdate, ObligationStatsOut
 
@@ -16,14 +17,14 @@ VALID_STATUSES = {"pending", "completed", "overdue", "upcoming"}
 VALID_PRIORITIES = {"low", "medium", "high"}
 
 
-def _mine(user_id: str):
-    """Every query is restricted to obligations on the caller's own contracts."""
-    return Obligation.contract_id.in_(owned_contract_ids(user_id))
+def _mine(workspace_id: str):
+    """Every query is restricted to obligations on the active workspace's contracts."""
+    return Obligation.contract_id.in_(workspace_contract_ids(workspace_id))
 
 
-async def _get_owned(db: AsyncSession, obligation_id: str, user_id: str) -> Obligation:
+async def _get_owned(db: AsyncSession, obligation_id: str, workspace_id: str) -> Obligation:
     result = await db.execute(
-        select(Obligation).where(Obligation.id == obligation_id, _mine(user_id))
+        select(Obligation).where(Obligation.id == obligation_id, _mine(workspace_id))
     )
     obligation = result.scalar_one_or_none()
     if not obligation:
@@ -34,14 +35,14 @@ async def _get_owned(db: AsyncSession, obligation_id: str, user_id: str) -> Obli
 @router.get("", response_model=List[ObligationOut])
 async def list_obligations(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(current_workspace),
     contract_id: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
 ):
-    q = select(Obligation).where(_mine(user_id)).order_by(Obligation.created_at.desc())
+    q = select(Obligation).where(_mine(ctx.workspace_id)).order_by(Obligation.created_at.desc())
     if contract_id:
         q = q.where(Obligation.contract_id == contract_id)
     if status:
@@ -55,10 +56,10 @@ async def list_obligations(
 @router.get("/stats", response_model=ObligationStatsOut)
 async def get_obligation_stats(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(current_workspace),
 ):
     async def count(where=None) -> int:
-        q = select(func.count(Obligation.id)).where(_mine(user_id))
+        q = select(func.count(Obligation.id)).where(_mine(ctx.workspace_id))
         if where is not None:
             q = q.where(where)
         return (await db.execute(q)).scalar() or 0
@@ -76,18 +77,18 @@ async def get_obligation_stats(
 async def get_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(current_workspace),
 ):
-    return await _get_owned(db, obligation_id, user_id)
+    return await _get_owned(db, obligation_id, ctx.workspace_id)
 
 
 @router.patch("/{obligation_id}/complete")
 async def complete_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(editable_workspace),
 ):
-    await _get_owned(db, obligation_id, user_id)
+    await _get_owned(db, obligation_id, ctx.workspace_id)
     await db.execute(
         update(Obligation).where(Obligation.id == obligation_id).values(status="completed")
     )
@@ -100,9 +101,9 @@ async def update_obligation(
     obligation_id: str,
     data: ObligationUpdate,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(editable_workspace),
 ):
-    await _get_owned(db, obligation_id, user_id)
+    await _get_owned(db, obligation_id, ctx.workspace_id)
     values = {
         k: v for k, v in data.model_dump(exclude_unset=True).items()
         # these columns are NOT NULL — an explicit null would raise an IntegrityError
@@ -126,9 +127,9 @@ async def update_obligation(
 async def delete_obligation(
     obligation_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(require_auth),
+    ctx: WorkspaceContext = Depends(editable_workspace),
 ):
-    await _get_owned(db, obligation_id, user_id)
+    await _get_owned(db, obligation_id, ctx.workspace_id)
     await db.execute(delete(Obligation).where(Obligation.id == obligation_id))
     await db.commit()
     return {"status": "deleted", "id": obligation_id}

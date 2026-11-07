@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAlerts, useAlertStats, useDismissAlert, useMarkAlertRead, useMarkAllAlertsRead } from "@/lib/queries";
+import { useActiveWorkspace, useAlerts, useAlertStats, useDismissAlert, useMarkAlertRead, useMarkAllAlertsRead } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { toast } from "@/lib/toast";
@@ -22,6 +22,7 @@ export default function AlertsPage() {
   const markRead = useMarkAlertRead();
   const markAll = useMarkAllAlertsRead();
   const dismiss = useDismissAlert();
+  const { canEdit } = useActiveWorkspace();
 
   const unread = stats?.unread ?? alerts.filter((a) => !a.read).length;
   const types = [...new Set(alerts.map((a) => a.type).filter(Boolean))];
@@ -32,7 +33,7 @@ export default function AlertsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <PageHead title="Alerts" sub={isLoading ? "\u00a0" : unread ? `${unread} unread` : "You're all caught up."}>
-        {unread > 0 && (
+        {canEdit && unread > 0 && (
           <button
             type="button"
             className="btn btn-quiet"
@@ -84,27 +85,27 @@ export default function AlertsPage() {
                         {a.contract_id && (
                           <Link
                             href={`/contracts/${a.contract_id}`}
-                            onClick={() => !a.read && markRead.mutate(a.id)}
+                            onClick={() => canEdit && !a.read && markRead.mutate(a.id)}
                             className="text-pen hover:underline"
                           >
                             Open contract
                           </Link>
                         )}
-                        {!a.read && (
+                        {canEdit && !a.read && (
                           <button type="button" className="hover:text-ink" onClick={() => markRead.mutate(a.id, { onError: onError("Couldn't update the alert.") })}>
                             Mark as read
                           </button>
                         )}
                       </p>
                     </div>
-                    <button
+                    {canEdit && <button
                       type="button"
                       aria-label={`Dismiss: ${a.title}`}
                       onClick={() => dismiss.mutate(a.id, { onError: onError("Couldn't dismiss the alert.") })}
                       className="h-8 shrink-0 rounded-md px-2 text-sm text-faint hover:bg-bg hover:text-ink"
                     >
                       Dismiss
-                    </button>
+                    </button>}
                   </li>
                 );
               })}

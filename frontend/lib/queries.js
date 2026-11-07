@@ -1,7 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { alertsAPI, analysisAPI, contractsAPI, obligationsAPI } from "./api";
+import { alertsAPI, analysisAPI, contractsAPI, obligationsAPI, workspacesAPI } from "./api";
+import { useSession } from "./session";
+import { useWorkspaceId } from "./workspace";
 
 // Everything a finished (or deleted) review can change.
 const REVIEW_KEYS = ["contracts", "contractStats", "obligations", "obligationStats", "alerts", "alertStats"];
@@ -137,3 +139,55 @@ function useAlertMutation(fn) {
 export const useMarkAlertRead = () => useAlertMutation(alertsAPI.markRead);
 export const useMarkAllAlertsRead = () => useAlertMutation(alertsAPI.markAllRead);
 export const useDismissAlert = () => useAlertMutation(alertsAPI.dismiss);
+/* ---------------- workspaces ---------------- */
+export const useWorkspaces = (enabled = true) =>
+  useQuery({ queryKey: ["workspaces"], queryFn: workspacesAPI.list, enabled, staleTime: 60_000 });
+
+/**
+ * The workspace being viewed and what the user may do in it. Until the list
+ * loads, actions are shown (the server still enforces every permission).
+ */
+export function useActiveWorkspace() {
+  const session = useSession();
+  const storedId = useWorkspaceId();
+  const { data, isLoading, isFetching } = useWorkspaces(Boolean(session?.token));
+  const workspaces = data || [];
+  const active =
+    workspaces.find((w) => w.id === storedId) || workspaces.find((w) => w.is_personal) || workspaces[0] || null;
+  const role = active?.role;
+  return {
+    workspaces,
+    active,
+    storedId,
+    isLoading,
+    isFetching,
+    role,
+    userId: session?.user?.id,
+    canEdit: role ? role !== "viewer" : true,
+    canAdmin: role === "owner" || role === "admin",
+    isOwner: role === "owner",
+  };
+}
+
+export const useMembers = (workspaceId) =>
+  useQuery({ queryKey: ["members", workspaceId], queryFn: () => workspacesAPI.members(workspaceId), enabled: Boolean(workspaceId) });
+
+export const useInvites = (workspaceId, enabled) =>
+  useQuery({
+    queryKey: ["invites", workspaceId],
+    queryFn: () => workspacesAPI.invites(workspaceId),
+    enabled: Boolean(workspaceId) && enabled,
+  });
+
+/** Mutation that refreshes the workspace list, members and invites afterwards. */
+export function useWorkspaceMutation(fn) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["invites"] });
+    },
+  });
+}

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useAnalysis, useCompleteObligation, useContract, useDeleteContract, useInvalidateAll, useObligations, useReanalyze } from "@/lib/queries";
+import { useActiveWorkspace, useAnalysis, useCompleteObligation, useContract, useDeleteContract, useInvalidateAll, useObligations, useReanalyze } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { fileKind, fileSize, formatDate, formatDue } from "@/lib/format";
 import { toast } from "@/lib/toast";
@@ -35,7 +35,7 @@ function Reviewing() {
   );
 }
 
-function Failed({ onRetry, busy }) {
+function Failed({ onRetry, busy, canEdit = true }) {
   return (
     <div className="mt-8 rounded-xl border border-rule bg-page p-8">
       <h2 className="text-xl">The review didn&rsquo;t finish</h2>
@@ -43,19 +43,19 @@ function Failed({ onRetry, busy }) {
         Either no readable text was found or the review was interrupted. If it fails again, the file may be password-protected, damaged,
         or a scan with no text layer.
       </p>
-      <div className="mt-5 flex flex-wrap gap-2">
+      {canEdit && <div className="mt-5 flex flex-wrap gap-2">
         <button type="button" className="btn btn-primary" onClick={onRetry} disabled={busy}>
           {busy && <Spinner />} {busy ? "Restarting…" : "Review it again"}
         </button>
         <Link href="/contracts/upload" className="btn btn-quiet">
           Upload a different file
         </Link>
-      </div>
+      </div>}
     </div>
   );
 }
 
-function ContractObligations({ contractId }) {
+function ContractObligations({ contractId, canEdit }) {
   const { data = [], isLoading } = useObligations({ contract_id: contractId });
   const complete = useCompleteObligation();
   if (isLoading) return <Loading />;
@@ -69,7 +69,7 @@ function ContractObligations({ contractId }) {
             <input
               type="checkbox"
               checked={done}
-              disabled={done || complete.isPending}
+              disabled={done || complete.isPending || !canEdit}
               onChange={() =>
                 complete.mutate(o.id, {
                   onSuccess: () => track("obligation_completed", { from: "contract" }),
@@ -101,6 +101,7 @@ export default function ContractPage() {
   const a = analysis.data;
   const del = useDeleteContract();
   const reanalyze = useReanalyze();
+  const { canEdit, canAdmin, userId } = useActiveWorkspace();
   const invalidateAll = useInvalidateAll();
   const [confirm, setConfirm] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -185,25 +186,27 @@ export default function ContractPage() {
                 Save as PDF
               </button>
             )}
-            {c.status === "completed" && !notContract && (
+            {canEdit && c.status === "completed" && !notContract && (
               <button type="button" className="btn btn-quiet px-3 py-1.5" onClick={retry} disabled={reanalyze.isPending}>
                 {reanalyze.isPending ? "Restarting…" : "Review again"}
               </button>
             )}
-            <button type="button" className="btn btn-quiet px-3 py-1.5 text-danger" onClick={() => setConfirm(true)}>
-              Delete
-            </button>
+            {(canAdmin || (canEdit && c.user_id === userId)) && (
+              <button type="button" className="btn btn-quiet px-3 py-1.5 text-danger" onClick={() => setConfirm(true)}>
+                Delete
+              </button>
+            )}
           </div>
         </div>
         {a && !notContract && a.risk_score != null && <RiskMeter score={a.risk_score} level={a.risk_level} />}
       </header>
 
       {c.status === "processing" && <Reviewing />}
-      {c.status === "failed" && <Failed onRetry={retry} busy={reanalyze.isPending} />}
+      {c.status === "failed" && <Failed onRetry={retry} busy={reanalyze.isPending} canEdit={canEdit} />}
       {c.status === "completed" && analysis.isLoading && <Loading label="Loading the review…" />}
       {c.status === "completed" && analysis.error && <ErrorNote message="Couldn't load the review." onRetry={() => analysis.refetch()} />}
       {c.status === "completed" && !analysis.isLoading && !analysis.error && !a && (
-        <Failed onRetry={retry} busy={reanalyze.isPending} />
+        <Failed onRetry={retry} busy={reanalyze.isPending} canEdit={canEdit} />
       )}
 
       {notContract && (
@@ -212,9 +215,11 @@ export default function ContractPage() {
           <p className="mt-2 max-w-[60ch] text-muted">
             {a.summary || "No agreement terms were found in this document."} Nothing was scored, and no obligations or alerts were created.
           </p>
-          <Link href="/contracts/upload" className="btn btn-primary mt-5">
-            Upload a contract
-          </Link>
+          {canEdit && (
+            <Link href="/contracts/upload" className="btn btn-primary mt-5">
+              Upload a contract
+            </Link>
+          )}
         </div>
       )}
 
@@ -312,7 +317,7 @@ export default function ContractPage() {
                 </Link>
               </div>
               <div className="mt-3">
-                <ContractObligations contractId={id} />
+                <ContractObligations contractId={id} canEdit={canEdit} />
               </div>
             </section>
             {clauses.length > 0 && (

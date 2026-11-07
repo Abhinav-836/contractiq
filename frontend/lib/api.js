@@ -1,5 +1,6 @@
 import axios from "axios";
 import { clearSession, getToken } from "./session";
+import { getWorkspaceId, setWorkspaceId } from "./workspace";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
@@ -8,6 +9,12 @@ const api = axios.create({ baseURL: `${API_URL}/api/v1`, timeout: 60000 });
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Scope data requests to the selected workspace. /workspaces/{id}/... routes
+  // name their workspace in the path instead.
+  const workspaceId = getWorkspaceId();
+  if (workspaceId && !(config.url || "").startsWith("/workspaces") && !(config.url || "").startsWith("/invites")) {
+    config.headers["X-Workspace-Id"] = workspaceId;
+  }
   return config;
 });
 
@@ -15,6 +22,11 @@ api.interceptors.request.use((config) => {
 // and send the user to the sign-in page, remembering where they were.
 api.interceptors.response.use(undefined, (err) => {
   const url = err.config?.url || "";
+  // The selected workspace was deleted or we were removed from it: fall back
+  // to the personal workspace instead of showing errors everywhere.
+  if (err.response?.status === 404 && err.response?.data?.detail === "Workspace not found" && err.config?.headers?.["X-Workspace-Id"]) {
+    setWorkspaceId(null);
+  }
   // Only a request that carried a token can mean "session expired"; a
   // signed-out request is the page guard's job, not this one.
   const hadToken = Boolean(err.config?.headers?.Authorization);
@@ -94,6 +106,24 @@ export const alertsAPI = {
   markRead: (id) => data(api.patch(`/alerts/${id}/read`)),
   markAllRead: () => data(api.post("/alerts/mark-all-read")),
   dismiss: (id) => data(api.delete(`/alerts/${id}`)),
+};
+
+export const workspacesAPI = {
+  list: () => data(api.get("/workspaces")),
+  create: (name) => data(api.post("/workspaces", { name })),
+  rename: (id, name) => data(api.patch(`/workspaces/${id}`, { name })),
+  remove: (id) => data(api.delete(`/workspaces/${id}`)),
+  members: (id) => data(api.get(`/workspaces/${id}/members`)),
+  setRole: (id, userId, role) => data(api.patch(`/workspaces/${id}/members/${userId}`, { role })),
+  removeMember: (id, userId) => data(api.delete(`/workspaces/${id}/members/${userId}`)),
+  invites: (id) => data(api.get(`/workspaces/${id}/invites`)),
+  createInvite: (id, body) => data(api.post(`/workspaces/${id}/invites`, body)),
+  revokeInvite: (id, inviteId) => data(api.delete(`/workspaces/${id}/invites/${inviteId}`)),
+};
+
+export const invitesAPI = {
+  preview: (token) => data(api.get(`/invites/${encodeURIComponent(token)}`)),
+  accept: (token) => data(api.post(`/invites/${encodeURIComponent(token)}/accept`)),
 };
 
 export default api;

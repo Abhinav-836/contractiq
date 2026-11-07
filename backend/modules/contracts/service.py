@@ -14,6 +14,7 @@ from core.constants import ALLOWED_FILE_EXTENSIONS
 from db.session import AsyncSessionLocal
 from modules.contracts.models import Contract, ContractFile
 from modules.contracts.repository import ContractRepository
+from modules.workspaces.permissions import WorkspaceContext
 from modules.analysis.repository import AnalysisRepository
 from modules.analysis.orchestrator import orchestrate_analysis
 from ingestion.parser import extract_text, ExtractionError
@@ -42,23 +43,23 @@ class ContractService:
         self.db = db
         self.repo = ContractRepository(db)
 
-    async def get_all(self, user_id: str, skip=0, limit=50, status=None):
-        return await self.repo.list_all(user_id, skip, limit, status)
+    async def get_all(self, workspace_id: str, skip=0, limit=50, status=None):
+        return await self.repo.list_all(workspace_id, skip, limit, status)
 
-    async def get_stats(self, user_id: str):
-        return await self.repo.stats(user_id)
+    async def get_stats(self, workspace_id: str):
+        return await self.repo.stats(workspace_id)
 
-    async def get_owned(self, contract_id: str, user_id: str) -> Contract:
+    async def get_in_workspace(self, contract_id: str, workspace_id: str) -> Contract:
         """
-        Fetch a contract the caller owns. Returns 404 (not 403) for other users'
-        contracts so ids can't be probed.
+        Fetch a contract in the active workspace. Returns 404 (not 403) for
+        contracts elsewhere so ids can't be probed.
         """
         contract = await self.repo.get_by_id(contract_id)
-        if not contract or contract.user_id != user_id:
+        if not contract or contract.workspace_id != workspace_id:
             raise HTTPException(404, "Contract not found")
         return contract
 
-    async def upload(self, file: UploadFile, background_tasks: BackgroundTasks, user_id: str):
+    async def upload(self, file: UploadFile, background_tasks: BackgroundTasks, ctx: WorkspaceContext):
         filename = os.path.basename(file.filename or "").strip()
         if not filename:
             raise HTTPException(400, "File has no name")
@@ -83,7 +84,8 @@ class ContractService:
             file_type=ext,
             file_size=len(content),
             file_path=DB_STORAGE_MARKER,
-            user_id=user_id,
+            user_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
         )
         # Store the bytes in Postgres — Render's disk is wiped on every deploy/restart
         self.db.add(ContractFile(contract_id=contract.id, data=content))
@@ -111,7 +113,9 @@ class ContractService:
         background_tasks.add_task(_run_analysis_task, contract.id, contract.file_type, contract.filename)
         return {"message": "Analysis triggered", "contract_id": contract.id, "status": "processing"}
 
-    async def delete(self, contract: Contract):
+    async def delete(self, contract: Contract, ctx: WorkspaceContext):
+        if not ctx.can("admin") and contract.user_id != ctx.user_id:
+            raise HTTPException(403, "Only owners and admins can delete contracts uploaded by someone else")
         file_path = contract.file_path
         await self.repo.delete_with_children(contract.id)
         await self.db.commit()

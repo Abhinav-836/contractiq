@@ -36,7 +36,10 @@ Analysis runs in the background after upload; the contract shows as *processing*
 - **Obligations** — extracted automatically; filter, edit, mark complete
 - **Alerts** — created for high-risk clauses and high-priority obligations; mark read / read all
 - **Re-analyse** any contract (e.g. after configuring a better model)
-- **Accounts** — register / login with JWT; each user sees only their own contracts
+- **Accounts** — register / login with JWT
+- **Team workspaces** — every account has a personal workspace; create shared ones for a team and switch between them from the header. Contracts, reviews, obligations and alerts belong to a workspace, and everyone in it sees the same ones
+- **Roles** — *owner* (one per workspace), *admin* (invite people, manage members, delete any contract), *member* (upload, re-run reviews, update obligations and alerts, delete their own uploads), *viewer* (read-only)
+- **Invite links** — admins create links that join as a chosen role, expire after 1–30 days and can be limited to a number of people; links can be revoked, and only a hash of each link is stored
 
 ## Run locally
 
@@ -87,7 +90,7 @@ Frontend: `NEXT_PUBLIC_API_URL` — the backend URL, no trailing slash.
 
 ## API
 
-All routes are under `/api/v1`; everything except register/login needs a `Bearer` token. Full interactive docs at `/docs`.
+All routes are under `/api/v1`; everything except register, login and the invite preview needs a `Bearer` token. Full interactive docs at `/docs`.
 
 | Area | Endpoints |
 |---|---|
@@ -96,29 +99,57 @@ All routes are under `/api/v1`; everything except register/login needs a `Bearer
 | Analysis | `GET /analysis/contract/{contract_id}`, `GET /analysis/{id}` |
 | Obligations | `GET /obligations`, `GET /obligations/stats`, `GET/PATCH/DELETE /obligations/{id}`, `PATCH /obligations/{id}/complete` |
 | Alerts | `GET /alerts`, `GET /alerts/stats`, `PATCH /alerts/{id}/read`, `POST /alerts/mark-all-read`, `DELETE /alerts/{id}` |
+| Workspaces | `GET/POST /workspaces`, `PATCH/DELETE /workspaces/{id}`, `GET /workspaces/{id}/members`, `PATCH/DELETE /workspaces/{id}/members/{user_id}` |
+| Invite links | `GET/POST /workspaces/{id}/invites`, `DELETE /workspaces/{id}/invites/{invite_id}`, `GET /invites/{token}` (public preview), `POST /invites/{token}/accept` |
 | Status | `GET /health`, `GET /api/v1/llm/status` (active provider and fallback chain) |
+
+Data routes (contracts, analysis, obligations, alerts) act on the workspace named in the `X-Workspace-Id` header, or on your personal workspace when it's left out. A workspace you're not in returns `404`; a viewer trying to change something gets `403`.
 
 ## Project structure
 
 ```
 backend/
   apps/api/        FastAPI app, routes, startup
-  modules/         users, contracts, analysis, obligations, alerts (api / service / repository / models)
+  modules/         users, workspaces, contracts, analysis, obligations, alerts (api / service / repository / models)
+  migrations/      Alembic migrations (run automatically on startup)
+  tests/           pytest: workspaces, roles, invites, access isolation
   ai/agents/       parser → risk → obligation pipeline
   ai/llm/          Ollama, Gemini, OpenAI, mock clients + provider router
   ai/prompts/      risk analysis prompt (risk.yaml)
   ingestion/       PDF / DOCX / TXT extraction, Gemini OCR
   core/            config, security, logging
 frontend/
-  app/             Next.js routes: dashboard, contracts, upload, obligations, alerts, login, register
+  app/             Next.js routes: dashboard, contracts, upload, obligations, alerts, team, invite/[token], login, register
   components/      clause review, risk bar, contract table, auth form
   lib/             API client, queries, session
 ```
+
+## Database migrations
+
+Schema changes are [Alembic](https://alembic.sqlalchemy.org) migrations in `backend/migrations/`, applied automatically when the server starts. A database created before migrations existed is detected, stamped at the baseline, and upgraded; on Postgres an advisory lock stops two instances from migrating at once.
+
+After changing a model, from `backend/`:
+
+```bash
+alembic revision --autogenerate -m "describe the change"   # then review the generated file
+```
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+They use a throwaway SQLite database and the mock LLM. To run them against Postgres, point `TEST_DATABASE_URL` at an empty database.
 
 ## Limitations
 
 - Only the first ~15,000 characters of a contract are sent to the model, so very long agreements are reviewed on their opening sections.
 - Analysis runs as a background task inside the API process, not a separate worker queue. If the server restarts mid-analysis (common on Render's free tier), that contract is marked failed on startup and needs a re-analyse.
+- Alert read/unread state is shared by everyone in a workspace.
+- Ownership of a workspace can't be transferred yet.
 - This is an AI review to speed up reading a contract, not legal advice.
 
 ---

@@ -8,9 +8,9 @@ from modules.contracts.models import Contract, ContractFile
 from core.constants import ContractStatus
 
 
-def owned_contract_ids(user_id: str):
-    """Subquery of contract ids belonging to a user — used to scope obligations/alerts/analyses."""
-    return select(Contract.id).where(Contract.user_id == user_id)
+def workspace_contract_ids(workspace_id: str):
+    """Subquery of contract ids in a workspace — used to scope obligations/alerts/analyses."""
+    return select(Contract.id).where(Contract.workspace_id == workspace_id)
 
 
 class ContractRepository:
@@ -24,6 +24,7 @@ class ContractRepository:
         file_size: int,
         file_path: str,
         user_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
     ) -> Contract:
         contract = Contract(
             id=gen_uuid(),
@@ -32,6 +33,7 @@ class ContractRepository:
             file_size=file_size,
             file_path=file_path,
             user_id=user_id,
+            workspace_id=workspace_id,
             status=ContractStatus.PROCESSING.value,
         )
         self.db.add(contract)
@@ -44,14 +46,14 @@ class ContractRepository:
 
     async def list_all(
         self,
-        user_id: str,
+        workspace_id: str,
         skip: int = 0,
         limit: int = 50,
         status: Optional[str] = None,
     ) -> List[Contract]:
         q = (
             select(Contract)
-            .where(Contract.user_id == user_id)
+            .where(Contract.workspace_id == workspace_id)
             .order_by(Contract.created_at.desc())
         )
         if status:
@@ -100,9 +102,9 @@ class ContractRepository:
         await self.db.execute(delete(Contract).where(Contract.id == contract_id))
         await self.db.flush()
 
-    async def stats(self, user_id: str) -> dict:
+    async def stats(self, workspace_id: str) -> dict:
         async def count(where_clause=None) -> int:
-            q = select(func.count(Contract.id)).where(Contract.user_id == user_id)
+            q = select(func.count(Contract.id)).where(Contract.workspace_id == workspace_id)
             if where_clause is not None:
                 q = q.where(where_clause)
             return (await self.db.execute(q)).scalar() or 0

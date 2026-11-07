@@ -13,6 +13,7 @@ class ContractListItem(BaseModel):
     file_size: int
     status: str
     risk_level: Optional[str] = None
+    user_id: Optional[str] = None  # who uploaded it (members may delete only their own)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

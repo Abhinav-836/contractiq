@@ -61,17 +61,11 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Create all tables on startup."""
-    from db.base import Base
-    # Import all models so they register with Base.metadata
-    import modules.users.models        # noqa: F401
-    import modules.contracts.models    # noqa: F401
-    import modules.analysis.models     # noqa: F401
-    import modules.obligations.models  # noqa: F401
-    import modules.alerts.models       # noqa: F401
+    """Bring the schema up to date with Alembic migrations (see db/migrate.py)."""
+    from db.migrate import run_migrations
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(run_migrations)
     logger.info("database.initialized")
 
 

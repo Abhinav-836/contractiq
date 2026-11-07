@@ -56,9 +56,12 @@ async def ensure_default_user() -> None:
             count = (await db.execute(select(func.count()).select_from(User))).scalar()
             if count:
                 return
-            await UserRepository(db).create(
+            from modules.workspaces.service import create_personal_workspace
+
+            user = await UserRepository(db).create(
                 email="test@example.com", name="Test User", password="test1234"
             )
+            await create_personal_workspace(db, user)
             await db.commit()
             logger.warning("users.dev_test_user_created email=test@example.com")
     except Exception as e:

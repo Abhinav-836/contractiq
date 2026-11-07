@@ -51,6 +51,7 @@ export function clearSession() {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
     sessionStorage.removeItem("auth-storage"); // old app's store
+    sessionStorage.removeItem("ciq_workspace"); // selected workspace belongs to this account
   } catch {
     /* ignore */
   }

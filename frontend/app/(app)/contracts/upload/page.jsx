@@ -3,12 +3,12 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUploadContract } from "@/lib/queries";
+import { useActiveWorkspace, useUploadContract } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { fileSize } from "@/lib/format";
 import { track } from "@/lib/track";
 import { toast } from "@/lib/toast";
-import { Spinner } from "@/components/States";
+import { Loading, Spinner } from "@/components/States";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED = [".pdf", ".docx", ".txt"];
@@ -25,6 +25,7 @@ function check(file) {
 export default function UploadPage() {
   const router = useRouter();
   const upload = useUploadContract();
+  const { active, canEdit, isLoading: workspaceLoading } = useActiveWorkspace();
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
@@ -57,13 +58,38 @@ export default function UploadPage() {
 
   const busy = upload.isPending;
 
+  // Wait for the role, so a viewer never sees the upload form flash up first.
+  if (workspaceLoading) return <Loading label="Opening…" />;
+
+  if (!canEdit) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <h1 className="text-3xl sm:text-4xl">Upload a contract</h1>
+        <p className="mt-3 text-muted">
+          You have view-only access to {active?.name || "this workspace"}, so you can&apos;t upload here. Switch to your own
+          workspace from the menu at the top, or ask an admin to make you a member.
+        </p>
+        <Link href="/contracts" className="btn btn-quiet mt-6">
+          Back to contracts
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/contracts" className="text-sm text-muted hover:text-ink">
         Contracts
       </Link>
       <h1 className="mt-2 text-3xl sm:text-4xl">Upload a contract</h1>
-      <p className="mt-2 text-muted">The review usually takes under a minute. You can leave this page while it runs.</p>
+      <p className="mt-2 text-muted">
+        {active && !active.is_personal ? (
+          <>
+            It goes into <span className="font-semibold text-ink">{active.name}</span>, where everyone in the workspace can see it.{" "}
+          </>
+        ) : null}
+        The review usually takes under a minute. You can leave this page while it runs.
+      </p>
 
       <form onSubmit={submit} className="mt-8">
         <label

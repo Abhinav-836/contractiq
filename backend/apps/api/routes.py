@@ -9,6 +9,7 @@ from modules.contracts.api import router as contracts_router
 from modules.analysis.api import router as analysis_router
 from modules.obligations.api import router as obligations_router
 from modules.alerts.api import router as alerts_router
+from modules.workspaces.api import router as workspaces_router, invites_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -17,6 +18,8 @@ api_router.include_router(contracts_router, prefix="/contracts", tags=["Contract
 api_router.include_router(analysis_router, prefix="/analysis", tags=["Analysis"])
 api_router.include_router(obligations_router, prefix="/obligations", tags=["Obligations"])
 api_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
+api_router.include_router(workspaces_router, prefix="/workspaces", tags=["Workspaces"])
+api_router.include_router(invites_router, prefix="/invites", tags=["Workspaces"])
 
 
 @api_router.get("/health")

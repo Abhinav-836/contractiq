@@ -4,6 +4,7 @@ from core.dependencies import get_db
 from core.security import verify_password, create_access_token, require_auth
 from modules.users.repository import UserRepository
 from modules.users.schemas import UserRegister, UserLogin, UserOut, TokenOut
+from modules.workspaces.service import create_personal_workspace
 
 # Remove the prefix from here - let routes.py handle it
 router = APIRouter(tags=["auth"])
@@ -15,6 +16,7 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     if await repo.exists(body.email):
         raise HTTPException(400, "Email already registered")
     user = await repo.create(body.email, body.name, body.password)
+    await create_personal_workspace(db, user)
     token = create_access_token(user.id, {"email": user.email, "name": user.name})
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 

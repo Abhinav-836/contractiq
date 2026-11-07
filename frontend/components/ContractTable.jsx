@@ -17,7 +17,7 @@ function Status({ c }) {
 }
 
 /** Contracts as a document list: name and meta left, review outcome right. */
-export default function ContractTable({ contracts, onDelete }) {
+export default function ContractTable({ contracts, onDelete, canDelete = () => true }) {
   return (
     <ul className="divide-y divide-rule overflow-hidden rounded-xl border border-rule bg-page">
       {contracts.map((c) => (
@@ -36,7 +36,7 @@ export default function ContractTable({ contracts, onDelete }) {
           <div className="shrink-0 text-right">
             <Status c={c} />
           </div>
-          {onDelete && (
+          {onDelete && canDelete(c) && (
             <button
               type="button"
               onClick={() => onDelete(c)}

@@ -83,7 +83,9 @@ export default function AuthForm({ mode }) {
       saveSession(res.access_token, res.user);
       track(isRegister ? "signed_up" : "signed_in");
       toast(isRegister ? `Account created. Welcome, ${res.user?.name?.split(" ")[0] || "there"}.` : `Welcome back, ${res.user?.name?.split(" ")[0] || "there"}.`, "success");
-      router.replace(isRegister ? "/contracts/upload" : next);
+      // A new account goes straight to its first upload — unless it came from
+      // a link (e.g. an invite) that asked to come back.
+      router.replace(isRegister && !params.get("next") ? "/contracts/upload" : next);
     } catch (err) {
       const status = err?.response?.status;
       setFormError(
@@ -137,7 +139,7 @@ export default function AuthForm({ mode }) {
           <p className="mt-6 text-sm text-muted">
             {isRegister ? "Already have an account? " : "New to ContractIQ? "}
             <Link
-              href={isRegister ? `/login${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}` : "/register"}
+              href={`${isRegister ? "/login" : "/register"}${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`}
               className="font-semibold text-pen underline-offset-4 hover:underline"
             >
               {isRegister ? "Sign in" : "Create an account"}
