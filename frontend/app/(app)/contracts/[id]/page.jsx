@@ -11,6 +11,7 @@ import { track } from "@/lib/track";
 import ClauseReview, { orderClauses } from "@/components/ClauseReview";
 import RiskBar from "@/components/RiskBar";
 import { ConfirmDelete } from "@/components/Modal";
+import ApprovalPanel from "@/components/Approval";
 import { RiskMeter } from "@/components/Risk";
 import { ErrorNote, Filters, Loading, Spinner } from "@/components/States";
 
@@ -280,6 +281,9 @@ export default function ContractPage() {
           </div>
 
           <aside className="space-y-8 lg:border-l lg:border-rule lg:pl-8">
+            <div className="no-print">
+              <ApprovalPanel contractId={id} contractStatus={c.status} />
+            </div>
             {a.parties?.length > 0 && (
               <section aria-labelledby="parties">
                 <h2 id="parties" className="text-sm font-semibold text-muted">

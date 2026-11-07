@@ -226,6 +226,9 @@ async def remove_member(db: AsyncSession, ctx: WorkspaceContext, target_user_id:
             raise HTTPException(400, "Owners can't leave their own workspace")
     elif not can_manage(ctx.role, target.role):
         raise HTTPException(403, "You don't have permission to remove this member")
+    from modules.approvals.service import on_member_removed
+
+    await on_member_removed(db, ctx.workspace_id, target_user_id)
     await db.delete(target)
     await db.commit()
 

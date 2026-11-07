@@ -18,6 +18,9 @@ class Contract(Base):
     # Who uploaded it. Access is decided by workspace_id, not by this.
     user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
+    # Latest approval outcome: None (never requested) | pending | approved | rejected.
+    # Kept in sync by modules/approvals/service.py so lists don't need a join.
+    approval_status = Column(String, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),

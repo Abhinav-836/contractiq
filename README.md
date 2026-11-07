@@ -39,6 +39,7 @@ Analysis runs in the background after upload; the contract shows as *processing*
 - **Accounts** — register / login with JWT
 - **Team workspaces** — every account has a personal workspace; create shared ones for a team and switch between them from the header. Contracts, reviews, obligations and alerts belong to a workspace, and everyone in it sees the same ones
 - **Roles** — *owner* (one per workspace), *admin* (invite people, manage members, delete any contract), *member* (upload, re-run reviews, update obligations and alerts, delete their own uploads), *viewer* (read-only)
+- **Approvals** — ask named people in the workspace to sign off a reviewed contract. Every reviewer must approve; one rejection (which needs a reason) sends it back. Reviewers can be any role, viewers included, so someone in finance can approve without being able to edit. The **Approvals** page lists what's waiting for you (with a count in the nav), what you asked for, and everything open; each contract shows its approval status and history
 - **Invite links** — admins create links that join as a chosen role, expire after 1–30 days and can be limited to a number of people; links can be revoked, and only a hash of each link is stored
 
 ## Run locally
@@ -101,6 +102,7 @@ All routes are under `/api/v1`; everything except register, login and the invite
 | Alerts | `GET /alerts`, `GET /alerts/stats`, `PATCH /alerts/{id}/read`, `POST /alerts/mark-all-read`, `DELETE /alerts/{id}` |
 | Workspaces | `GET/POST /workspaces`, `PATCH/DELETE /workspaces/{id}`, `GET /workspaces/{id}/members`, `PATCH/DELETE /workspaces/{id}/members/{user_id}` |
 | Invite links | `GET/POST /workspaces/{id}/invites`, `DELETE /workspaces/{id}/invites/{invite_id}`, `GET /invites/{token}` (public preview), `POST /invites/{token}/accept` |
+| Approvals | `GET /approvals?scope=waiting\|requested\|all&status=`, `GET /approvals/stats`, `GET/POST /approvals/contract/{contract_id}`, `POST /approvals/{id}/decision`, `POST /approvals/{id}/cancel` |
 | Status | `GET /health`, `GET /api/v1/llm/status` (active provider and fallback chain) |
 
 Data routes (contracts, analysis, obligations, alerts) act on the workspace named in the `X-Workspace-Id` header, or on your personal workspace when it's left out. A workspace you're not in returns `404`; a viewer trying to change something gets `403`.
@@ -110,16 +112,16 @@ Data routes (contracts, analysis, obligations, alerts) act on the workspace name
 ```
 backend/
   apps/api/        FastAPI app, routes, startup
-  modules/         users, workspaces, contracts, analysis, obligations, alerts (api / service / repository / models)
+  modules/         users, workspaces, approvals, contracts, analysis, obligations, alerts (api / service / repository / models)
   migrations/      Alembic migrations (run automatically on startup)
-  tests/           pytest: workspaces, roles, invites, access isolation
+  tests/           pytest: workspaces, roles, invites, approvals, access isolation
   ai/agents/       parser → risk → obligation pipeline
   ai/llm/          Ollama, Gemini, OpenAI, mock clients + provider router
   ai/prompts/      risk analysis prompt (risk.yaml)
   ingestion/       PDF / DOCX / TXT extraction, Gemini OCR
   core/            config, security, logging
 frontend/
-  app/             Next.js routes: dashboard, contracts, upload, obligations, alerts, team, invite/[token], login, register
+  app/             Next.js routes: dashboard, contracts, upload, obligations, approvals, alerts, team, invite/[token], login, register
   components/      clause review, risk bar, contract table, auth form
   lib/             API client, queries, session
 ```
@@ -150,6 +152,8 @@ They use a throwaway SQLite database and the mock LLM. To run them against Postg
 - Analysis runs as a background task inside the API process, not a separate worker queue. If the server restarts mid-analysis (common on Render's free tier), that contract is marked failed on startup and needs a re-analyse.
 - Alert read/unread state is shared by everyone in a workspace.
 - Ownership of a workspace can't be transferred yet.
+- Approval requests aren't emailed; reviewers see them in the app (Approvals page and nav count).
+- Re-running a review doesn't reset an earlier approval.
 - This is an AI review to speed up reading a contract, not legal advice.
 
 ---

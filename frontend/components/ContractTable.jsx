@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ApprovalBadge } from "./Approval";
 import { fileKind, fileSize, STATUS, timeAgo } from "@/lib/format";
 import { RiskChip } from "./Risk";
 import { Spinner } from "./States";
@@ -29,8 +30,11 @@ export default function ContractTable({ contracts, onDelete, canDelete = () => t
             <Link href={`/contracts/${c.id}`} className="block truncate font-medium after:absolute after:inset-0 hover:text-pen">
               {c.filename}
             </Link>
-            <p className="mt-0.5 text-sm text-faint">
-              {fileKind(c)}, {fileSize(c.file_size)}, uploaded {timeAgo(c.created_at)}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-faint">
+              <span>
+                {fileKind(c)}, {fileSize(c.file_size)}, uploaded {timeAgo(c.created_at)}
+              </span>
+              <ApprovalBadge status={c.approval_status} />
             </p>
           </div>
           <div className="shrink-0 text-right">

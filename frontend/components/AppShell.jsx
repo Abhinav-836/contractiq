@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { authAPI } from "@/lib/api";
 import { clearSession, saveSession, useSession } from "@/lib/session";
-import { useActiveWorkspace, useAlertStats } from "@/lib/queries";
+import { useActiveWorkspace, useAlertStats, useApprovalStats } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { setWorkspaceId } from "@/lib/workspace";
 import Logo from "./Logo";
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/dashboard", label: "Overview" },
   { href: "/contracts", label: "Contracts" },
   { href: "/obligations", label: "Obligations" },
+  { href: "/approvals", label: "Approvals", badge: "approvals" },
   { href: "/alerts", label: "Alerts", badge: "alerts" },
   { href: "/team", label: "Team" },
 ];
@@ -115,6 +116,7 @@ export default function AppShell({ children }) {
   const router = useRouter();
   const pathname = usePathname() || "";
   const { data: alertStats } = useAlertStats(Boolean(session?.token));
+  const { data: approvalStats } = useApprovalStats(Boolean(session?.token));
   const { active, canEdit } = useActiveWorkspace();
   useWorkspaceSync();
 
@@ -138,7 +140,7 @@ export default function AppShell({ children }) {
     );
   }
 
-  const unread = alertStats?.unread || 0;
+  const counts = { alerts: alertStats?.unread || 0, approvals: approvalStats?.waiting_for_me || 0 };
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -160,9 +162,12 @@ export default function AppShell({ children }) {
                   }`}
                 >
                   {item.label}
-                  {item.badge && unread > 0 && (
-                    <span className="rounded-full bg-mark-high px-1.5 text-[11px] font-semibold leading-5 text-white" aria-label={`${unread} unread`}>
-                      {unread > 99 ? "99+" : unread}
+                  {item.badge && counts[item.badge] > 0 && (
+                    <span
+                      className={`rounded-full px-1.5 text-[11px] font-semibold leading-5 text-white ${item.badge === "alerts" ? "bg-mark-high" : "bg-pen"}`}
+                      aria-label={item.badge === "alerts" ? `${counts.alerts} unread` : `${counts.approvals} waiting for you`}
+                    >
+                      {counts[item.badge] > 99 ? "99+" : counts[item.badge]}
                     </span>
                   )}
                   {active && <span aria-hidden="true" className="absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-pen" />}

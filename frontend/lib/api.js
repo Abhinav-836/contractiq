@@ -121,6 +121,15 @@ export const workspacesAPI = {
   revokeInvite: (id, inviteId) => data(api.delete(`/workspaces/${id}/invites/${inviteId}`)),
 };
 
+export const approvalsAPI = {
+  list: (params) => data(api.get(`/approvals${qs(params)}`)),
+  stats: () => data(api.get("/approvals/stats")),
+  forContract: (contractId) => data(api.get(`/approvals/contract/${contractId}`)),
+  request: (contractId, body) => data(api.post(`/approvals/contract/${contractId}`, body)),
+  decide: (id, decision, comment) => data(api.post(`/approvals/${id}/decision`, { decision, comment })),
+  cancel: (id) => data(api.post(`/approvals/${id}/cancel`)),
+};
+
 export const invitesAPI = {
   preview: (token) => data(api.get(`/invites/${encodeURIComponent(token)}`)),
   accept: (token) => data(api.post(`/invites/${encodeURIComponent(token)}/accept`)),

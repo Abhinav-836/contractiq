@@ -9,3 +9,4 @@ def import_all_models() -> None:
     import modules.obligations.models  # noqa: F401
     import modules.alerts.models       # noqa: F401
     import modules.workspaces.models   # noqa: F401
+    import modules.approvals.models    # noqa: F401

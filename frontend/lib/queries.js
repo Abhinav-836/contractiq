@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { alertsAPI, analysisAPI, contractsAPI, obligationsAPI, workspacesAPI } from "./api";
+import { alertsAPI, analysisAPI, approvalsAPI, contractsAPI, obligationsAPI, workspacesAPI } from "./api";
 import { useSession } from "./session";
 import { useWorkspaceId } from "./workspace";
 
@@ -189,5 +189,31 @@ export function useWorkspaceMutation(fn) {
       qc.invalidateQueries({ queryKey: ["members"] });
       qc.invalidateQueries({ queryKey: ["invites"] });
     },
+  });
+}
+
+/* ---------------- approvals ---------------- */
+export const useApprovals = (params = {}) =>
+  useQuery({ queryKey: ["approvals", params], queryFn: () => approvalsAPI.list(params), refetchInterval: 60_000 });
+
+export const useApprovalStats = (enabled = true) =>
+  useQuery({ queryKey: ["approvalStats"], queryFn: approvalsAPI.stats, refetchInterval: 30_000, enabled });
+
+export const useContractApprovals = (contractId, enabled = true) =>
+  useQuery({
+    queryKey: ["contractApprovals", contractId],
+    queryFn: () => approvalsAPI.forContract(contractId),
+    enabled: Boolean(contractId) && enabled,
+  });
+
+/** Anything that changes an approval also changes badges, lists and the contract's status. */
+export function useApprovalMutation(fn) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () =>
+      ["approvals", "approvalStats", "contractApprovals", "contracts", "contract"].forEach((k) =>
+        qc.invalidateQueries({ queryKey: [k] }),
+      ),
   });
 }
