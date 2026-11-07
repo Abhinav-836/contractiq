@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.base import gen_uuid
 from modules.approvals.models import ApprovalRequest, ApprovalReviewer
 from modules.contracts.models import Contract
+from modules.notifications import templates
+from modules.notifications.service import Email, Outbox, app_link
 from modules.users.models import User
 from modules.workspaces.models import WorkspaceMember
 from modules.workspaces.permissions import WorkspaceContext
@@ -185,7 +187,8 @@ async def _settle(db: AsyncSession, request: ApprovalRequest, closed_by: Optiona
 
 
 async def create_request(
-    db: AsyncSession, ctx: WorkspaceContext, contract_id: str, reviewer_ids: Iterable[str], note: Optional[str]
+    db: AsyncSession, ctx: WorkspaceContext, contract_id: str, reviewer_ids: Iterable[str], note: Optional[str],
+    outbox: Optional[Outbox] = None,
 ) -> dict:
     ctx.require("member", "You have view-only access to this workspace")
     contract = await _contract_in_workspace(db, ctx, contract_id)
@@ -237,10 +240,25 @@ async def create_request(
     await db.flush()
     await _sync_contract_status(db, contract_id)
     await db.commit()
+
+    if outbox is not None:
+        requester = await db.get(User, ctx.user_id)
+        reviewers = (await db.execute(select(User).where(User.id.in_(reviewer_ids)))).scalars().all()
+        for r in reviewers:
+            subject, html, text = templates.approval_requested(
+                r.name, requester.name if requester else "A teammate", contract.filename, request.note,
+                app_link(f"/contracts/{contract.id}"),
+            )
+            outbox.add(Email(
+                kind="approval_requested", to_email=r.email, to_name=r.name, subject=subject, html=html, text=text,
+                workspace_id=ctx.workspace_id, reply_to=requester.email if requester else None,
+                ref_type="approval_reviewer", ref_id=f"{request.id}:{r.id}",
+            ))
     return (await _serialize(db, [request], ctx.user_id))[0]
 
 
-async def decide(db: AsyncSession, ctx: WorkspaceContext, request_id: str, decision: str, comment: Optional[str]) -> dict:
+async def decide(db: AsyncSession, ctx: WorkspaceContext, request_id: str, decision: str, comment: Optional[str],
+                 outbox: Optional[Outbox] = None) -> dict:
     request = await _request_in_workspace(db, ctx, request_id, lock=True)
     if request.status != "pending":
         raise HTTPException(409, f"This request was already {request.status}")
@@ -257,6 +275,22 @@ async def decide(db: AsyncSession, ctx: WorkspaceContext, request_id: str, decis
     await db.flush()
     await _settle(db, request, closed_by=ctx.user_id)
     await db.commit()
+
+    # Tell the requester once the request is settled (one rejection, or everyone approved).
+    if outbox is not None and request.status in ("approved", "rejected") and request.requested_by:
+        requester = await db.get(User, request.requested_by)
+        decider = await db.get(User, ctx.user_id)
+        contract = await db.get(Contract, request.contract_id)
+        if requester and contract:
+            subject, html, text = templates.approval_decided(
+                requester.name, contract.filename, request.status, decider.name if decider else "A reviewer",
+                comment, app_link(f"/contracts/{contract.id}"),
+            )
+            outbox.add(Email(
+                kind="approval_decided", to_email=requester.email, to_name=requester.name, subject=subject,
+                html=html, text=text, workspace_id=request.workspace_id,
+                ref_type="approval_request", ref_id=request.id,
+            ))
     return (await _serialize(db, [request], ctx.user_id))[0]
 
 

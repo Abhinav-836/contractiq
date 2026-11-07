@@ -30,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.contracts.models import Contract
 from modules.contracts.service import load_file_bytes
+from modules.notifications import templates
+from modules.notifications.service import Email, Outbox, app_link, latest_status
 from modules.signatures.models import SignatureEnvelope, SignatureEvent, SignatureSigner
 from modules.users.models import User
 from modules.workspaces.permissions import WorkspaceContext
@@ -139,6 +141,8 @@ async def _serialize(db: AsyncSession, envelopes: list[SignatureEnvelope], ctx: 
         u.id: u.name for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
     } if user_ids else {}
 
+    email_status = await latest_status(db, "signature_signer", [s.id for s in signers])
+
     by_env: dict[str, list] = {}
     for s in signers:
         by_env.setdefault(s.envelope_id, []).append({
@@ -146,6 +150,8 @@ async def _serialize(db: AsyncSession, envelopes: list[SignatureEnvelope], ctx: 
             "typed_signature": s.typed_signature, "consent_text": s.consent_text,
             "decline_reason": s.decline_reason, "viewed_at": s.viewed_at, "acted_at": s.acted_at,
             "ip_address": s.ip_address, "user_agent": s.user_agent,
+            "email_status": (email_status.get(s.id) or {}).get("status"),
+            "email_error": (email_status.get(s.id) or {}).get("error"),
         })
     events_by_env: dict[str, list] = {}
     for ev in events:
@@ -224,6 +230,13 @@ async def _signed_copy(db: AsyncSession, envelope: SignatureEnvelope, ctx: Optio
     return build_signed_pdf(record, data), signed_filename(envelope.document_filename)
 
 
+async def signed_copy_for_email(db: AsyncSession, envelope_id: str) -> Optional[tuple[bytes, str]]:
+    envelope = await db.get(SignatureEnvelope, envelope_id)
+    if not envelope or envelope.status != "completed":
+        return None
+    return await _signed_copy(db, envelope, None)
+
+
 async def signed_copy(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str) -> tuple[bytes, str]:
     envelope = await _envelope_in_workspace(db, ctx, envelope_id)
     return await _signed_copy(db, envelope, ctx)
@@ -252,8 +265,26 @@ def _require_manager(ctx: WorkspaceContext, envelope: SignatureEnvelope) -> None
         raise HTTPException(409, f"This signature request is already {envelope.status}")
 
 
+def _queue_link_email(outbox: Optional[Outbox], envelope: SignatureEnvelope, signer: SignatureSigner,
+                      token: str, requester: Optional[User], reissued: bool = False) -> None:
+    if outbox is None:
+        return
+    requester_name = requester.name if requester else "Someone"
+    subject, html, text = templates.signature_request(
+        signer.name, requester_name, envelope.document_filename, envelope.message,
+        app_link(f"/sign/{token}"), reissued=reissued,
+    )
+    outbox.add(Email(
+        kind="signature_link" if reissued else "signature_request", to_email=signer.email, to_name=signer.name,
+        subject=subject, html=html, text=text, workspace_id=envelope.workspace_id,
+        reply_to=requester.email if requester else None,
+        ref_type="signature_signer", ref_id=signer.id, signature_envelope_id=envelope.id,
+    ))
+
+
 async def create_envelope(db: AsyncSession, ctx: WorkspaceContext, contract_id: str,
-                          signers: Iterable[dict], message: Optional[str], request: Optional[Request]) -> dict:
+                          signers: Iterable[dict], message: Optional[str], request: Optional[Request],
+                          outbox: Optional[Outbox] = None) -> dict:
     ctx.require("member", "You have view-only access to this workspace")
     contract = await _contract_in_workspace(db, ctx, contract_id)
     if contract.status != "completed":
@@ -306,6 +337,7 @@ async def create_envelope(db: AsyncSession, ctx: WorkspaceContext, contract_id: 
         db.add(signer)
         await db.flush()
         links[signer.id] = token
+        _queue_link_email(outbox, envelope, signer, token, requester)
 
     ip, ua = client_info(request)
     _event(db, envelope.id, "created", requester.name if requester else None,
@@ -315,11 +347,12 @@ async def create_envelope(db: AsyncSession, ctx: WorkspaceContext, contract_id: 
 
     out = (await _serialize(db, [envelope], ctx))[0]
     out["links"] = links
+    out["emailed"] = bool(outbox)
     return out
 
 
 async def reissue_link(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str, signer_id: str,
-                       request: Optional[Request]) -> dict:
+                       request: Optional[Request], outbox: Optional[Outbox] = None) -> dict:
     envelope = await _envelope_in_workspace(db, ctx, envelope_id, lock=True)
     _require_manager(ctx, envelope)
     signer = await db.get(SignatureSigner, signer_id)
@@ -334,8 +367,12 @@ async def reissue_link(db: AsyncSession, ctx: WorkspaceContext, envelope_id: str
     _event(db, envelope.id, "link_reissued", actor.name if actor else None,
            f"New signing link for {signer.name}; the old one no longer works", ip, ua)
     await db.flush()
+    # The email names whoever originally sent the document (an admin may be reissuing it).
+    sender = await db.get(User, envelope.requested_by) if envelope.requested_by else None
+    _queue_link_email(outbox, envelope, signer, token, sender or actor, reissued=True)
     out = (await _serialize(db, [envelope], ctx))[0]
     out["links"] = {signer.id: token}
+    out["emailed"] = bool(outbox)
     return out
 
 
@@ -441,7 +478,31 @@ def _require_open(signer: SignatureSigner, envelope: SignatureEnvelope) -> None:
         raise HTTPException(409, f"You have already {signer.status}")
 
 
-async def sign(db: AsyncSession, token: str, typed_name: str, consent: bool, request: Optional[Request]) -> dict:
+async def _queue_completed_emails(db: AsyncSession, outbox: Optional[Outbox], envelope: SignatureEnvelope) -> None:
+    if outbox is None:
+        return
+    requester = await db.get(User, envelope.requested_by) if envelope.requested_by else None
+    signers = (
+        await db.execute(select(SignatureSigner).where(SignatureSigner.envelope_id == envelope.id))
+    ).scalars().all()
+    recipients = [(s.name, s.email, False, s.id) for s in signers]
+    if requester and requester.email.lower() not in {s.email.lower() for s in signers}:
+        recipients.insert(0, (requester.name, requester.email, True, None))
+    for name, email, is_requester, signer_id in recipients:
+        is_req = is_requester or bool(requester and requester.email.lower() == email.lower())
+        subject, html, text = templates.signature_completed(
+            name, envelope.document_filename,
+            app_link(f"/signatures/{envelope.id}") if is_req else None, is_req, attached=True,
+        )
+        outbox.add(Email(
+            kind="signature_completed", to_email=email, to_name=name, subject=subject, html=html, text=text,
+            workspace_id=envelope.workspace_id, ref_type="signature_envelope", ref_id=envelope.id,
+            signature_envelope_id=envelope.id, attach_signed_pdf=envelope.id,
+        ))
+
+
+async def sign(db: AsyncSession, token: str, typed_name: str, consent: bool, request: Optional[Request],
+               outbox: Optional[Outbox] = None) -> dict:
     signer, envelope = await _signer_for_token(db, token, lock=True)
     _require_open(signer, envelope)
     if not consent:
@@ -473,10 +534,12 @@ async def sign(db: AsyncSession, token: str, typed_name: str, consent: bool, req
         _event(db, envelope.id, "completed", None, "Everyone has signed", None, None)
         await db.flush()
         await _sync_contract_status(db, envelope.contract_id)
+        await _queue_completed_emails(db, outbox, envelope)
     return await _public_view(db, signer, envelope)
 
 
-async def decline(db: AsyncSession, token: str, reason: str, request: Optional[Request]) -> dict:
+async def decline(db: AsyncSession, token: str, reason: str, request: Optional[Request],
+                  outbox: Optional[Outbox] = None) -> dict:
     signer, envelope = await _signer_for_token(db, token, lock=True)
     _require_open(signer, envelope)
     reason = (reason or "").strip()
@@ -490,4 +553,15 @@ async def decline(db: AsyncSession, token: str, reason: str, request: Optional[R
     _event(db, envelope.id, "declined", signer.name, reason, ip, ua)
     await db.flush()
     await _sync_contract_status(db, envelope.contract_id)
+    requester = await db.get(User, envelope.requested_by) if envelope.requested_by else None
+    if outbox is not None and requester:
+        subject, html, text = templates.signature_declined(
+            requester.name, signer.name, envelope.document_filename, reason,
+            app_link(f"/contracts/{envelope.contract_id}"),
+        )
+        outbox.add(Email(
+            kind="signature_declined", to_email=requester.email, to_name=requester.name, subject=subject,
+            html=html, text=text, workspace_id=envelope.workspace_id, reply_to=signer.email,
+            ref_type="signature_envelope", ref_id=envelope.id, signature_envelope_id=envelope.id,
+        ))
     return await _public_view(db, signer, envelope)

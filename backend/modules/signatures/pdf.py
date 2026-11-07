@@ -46,6 +46,7 @@ BAD = colors.HexColor("#b42318")
 EVENT_LABEL = {
     "created": "Sent for signing",
     "link_reissued": "New signing link issued",
+    "emailed": "Email sent",
     "viewed": "Opened the document",
     "signed": "Signed",
     "declined": "Declined to sign",

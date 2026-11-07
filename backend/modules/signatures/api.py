@@ -1,11 +1,12 @@
 from typing import List
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db
+from modules.notifications.service import Outbox, deliver
 from modules.signatures import service
 from modules.signatures.schemas import DeclineBody, EnvelopeCreate, EnvelopeOut, PublicSigningOut, SignBody
 from modules.workspaces.deps import current_workspace
@@ -30,12 +31,18 @@ async def send_for_signing(
     contract_id: str,
     body: EnvelopeCreate,
     request: Request,
+    background: BackgroundTasks,
     ctx: WorkspaceContext = Depends(current_workspace),
     db: AsyncSession = Depends(get_db),
 ):
     """Members and above. The response carries each signer's link token once."""
     signers = [s.model_dump() for s in body.signers]
-    return await service.create_envelope(db, ctx, contract_id, signers, body.message, request)
+    outbox = Outbox() if body.send_email else None
+    out = await service.create_envelope(db, ctx, contract_id, signers, body.message, request, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out
 
 
 @router.get("/{envelope_id}", response_model=EnvelopeOut)
@@ -70,11 +77,18 @@ async def new_link(
     envelope_id: str,
     signer_id: str,
     request: Request,
+    background: BackgroundTasks,
+    send_email: bool = Query(True, description="Email the new link to the signer (when email is set up)"),
     ctx: WorkspaceContext = Depends(current_workspace),
     db: AsyncSession = Depends(get_db),
 ):
     """Replace a signer's link (e.g. it was lost or sent to the wrong person)."""
-    return await service.reissue_link(db, ctx, envelope_id, signer_id, request)
+    outbox = Outbox() if send_email else None
+    out = await service.reissue_link(db, ctx, envelope_id, signer_id, request, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out
 
 
 @router.post("/{envelope_id}/cancel", response_model=EnvelopeOut)
@@ -112,10 +126,22 @@ async def signer_signed_pdf(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @public_router.post("/{token}/sign", response_model=PublicSigningOut)
-async def sign(token: str, body: SignBody, request: Request, db: AsyncSession = Depends(get_db)):
-    return await service.sign(db, token, body.typed_name, body.consent, request)
+async def sign(token: str, body: SignBody, request: Request, background: BackgroundTasks,
+               db: AsyncSession = Depends(get_db)):
+    outbox = Outbox()
+    out = await service.sign(db, token, body.typed_name, body.consent, request, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out
 
 
 @public_router.post("/{token}/decline", response_model=PublicSigningOut)
-async def decline(token: str, body: DeclineBody, request: Request, db: AsyncSession = Depends(get_db)):
-    return await service.decline(db, token, body.reason, request)
+async def decline(token: str, body: DeclineBody, request: Request, background: BackgroundTasks,
+                  db: AsyncSession = Depends(get_db)):
+    outbox = Outbox()
+    out = await service.decline(db, token, body.reason, request, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out

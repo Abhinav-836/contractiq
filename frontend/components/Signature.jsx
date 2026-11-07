@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { errorMessage, saveBlob, signaturesAPI, signingLink } from "@/lib/api";
 import { formatDate, timeAgo } from "@/lib/format";
-import { useActiveWorkspace, useContractSignatures, useMembers, useSignatureMutation } from "@/lib/queries";
+import { useActiveWorkspace, useContractSignatures, useFeatures, useMembers, useSignatureMutation } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
 import Modal from "./Modal";
@@ -28,8 +28,15 @@ const SIGNER_MARK = {
   declined: { icon: "✕", label: "Declined", className: "text-danger" },
 };
 
-function SignerRow({ s, children }) {
+const EMAIL_NOTE = {
+  sent: { text: "Emailed", className: "text-faint" },
+  failed: { text: "Email failed — copy a new link instead", className: "text-danger" },
+  skipped: { text: "Not emailed (daily email limit) — copy a new link instead", className: "text-danger" },
+};
+
+function SignerRow({ s, showEmail = false, children }) {
   const d = SIGNER_MARK[s.status];
+  const note = showEmail && s.status === "pending" ? EMAIL_NOTE[s.email_status] : null;
   return (
     <li className="text-sm">
       <div className="flex items-baseline gap-2">
@@ -43,6 +50,11 @@ function SignerRow({ s, children }) {
           {d ? d.label : s.viewed_at ? "Opened" : "Waiting"}
         </span>
       </div>
+      {note && (
+        <p className={`ml-5 mt-0.5 text-xs ${note.className}`} title={s.email_error || s.email}>
+          {note.text}
+        </p>
+      )}
       {s.decline_reason && <p className="ml-5 mt-1 whitespace-pre-wrap break-words text-muted">&ldquo;{s.decline_reason}&rdquo;</p>}
       {children}
     </li>
@@ -116,12 +128,26 @@ function mailto(signer, url, envelope) {
 export function LinksModal({ envelope, onClose }) {
   const links = envelope?.links || {};
   const signers = (envelope?.signers || []).filter((s) => links[s.id]);
+  const emailed = Boolean(envelope?.emailed);
+  const many = signers.length > 1;
+  const title = emailed
+    ? many ? "Signing links emailed" : "Signing link emailed"
+    : many ? "Send each person their link" : "Send the signing link";
   return (
-    <Modal open={Boolean(envelope)} onClose={onClose} title={signers.length > 1 ? "Send each person their link" : "Send the signing link"}>
-      <p className="text-muted">
-        ContractIQ doesn&apos;t send email, so share each link yourself. Each one is private to that person.{" "}
-        <strong className="font-semibold text-ink">This is the only time the links are shown</strong> — if one gets lost, make a new one.
-      </p>
+    <Modal open={Boolean(envelope)} onClose={onClose} title={title}>
+      {emailed ? (
+        <p className="text-muted">
+          We&apos;re emailing {many ? "each person their own link" : `${signers[0]?.name} their link`} now. You&apos;ll see
+          &ldquo;Emailed&rdquo; next to each name once it&apos;s gone. Copies are below in case you also want to share them
+          another way — <strong className="font-semibold text-ink">this is the only time they&apos;re shown</strong>.
+        </p>
+      ) : (
+        <p className="text-muted">
+          Share each link yourself — each one is private to that person.{" "}
+          <strong className="font-semibold text-ink">This is the only time the links are shown</strong> — if one gets lost,
+          make a new one.
+        </p>
+      )}
       <ul className="mt-4 max-h-72 space-y-3 overflow-y-auto">
         {signers.map((s) => {
           const url = signingLink(links[s.id]);
@@ -162,6 +188,9 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
   const { active } = useActiveWorkspace();
+  const { data: features } = useFeatures();
+  const emailOn = Boolean(features?.email);
+  const [sendEmail, setSendEmail] = useState(true);
   const { data: members = [] } = useMembers(open ? active?.id : null);
   const [rows, setRows] = useState([blank()]);
   const [message, setMessage] = useState("");
@@ -173,6 +202,7 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
       setRows([blank()]);
       setMessage("");
       setError("");
+      setSendEmail(true);
     }
   }, [open]);
 
@@ -201,8 +231,8 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
     const emails = signers.map((r) => r.email.toLowerCase());
     if (new Set(emails).size !== emails.length) return setError("The same email is listed twice.");
     try {
-      const env = await send.mutateAsync({ signers, message: message.trim() || null });
-      track("signature_requested", { signers: signers.length });
+      const env = await send.mutateAsync({ signers, message: message.trim() || null, send_email: emailOn && sendEmail });
+      track("signature_requested", { signers: signers.length, emailed: Boolean(env.emailed) });
       onClose();
       onSent(env);
     } catch (err) {
@@ -214,7 +244,8 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
     <Modal open={open} onClose={() => !send.isPending && onClose()} title="Send for signing">
       <form onSubmit={submit} noValidate>
         <p className="text-muted">
-          Each person gets a private link. They read the contract, type their name and agree — no account needed. Everyone has to sign.
+          Each person gets a private link{emailOn ? " by email" : ""}. They read the contract, type their name and agree — no
+          account needed. Everyone has to sign.
         </p>
         {approvalStatus !== "approved" && (
           <p className="mt-3 rounded-lg border border-rule bg-hi-med/40 px-3 py-2 text-sm">
@@ -302,6 +333,20 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+        {emailOn && (
+          <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--pen)]"
+            />
+            <span>
+              Email each person their link
+              <span className="block text-xs text-faint">Untick to copy and share the links yourself.</span>
+            </span>
+          </label>
+        )}
         {error && (
           <p role="alert" className="mt-3 text-sm text-danger">
             {error}
@@ -312,7 +357,7 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
             Cancel
           </button>
           <button type="submit" className="btn btn-primary" disabled={send.isPending}>
-            {send.isPending && <Spinner />} Create signing links
+            {send.isPending && <Spinner />} {emailOn && sendEmail ? "Send for signing" : "Create signing links"}
           </button>
         </div>
       </form>
@@ -370,7 +415,7 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
           </p>
           <ul className="mt-3 space-y-2">
             {open.signers.map((s) => (
-              <SignerRow key={s.id} s={s}>
+              <SignerRow key={s.id} s={s} showEmail>
                 {open.can_manage && s.status === "pending" && (
                   <button
                     type="button"

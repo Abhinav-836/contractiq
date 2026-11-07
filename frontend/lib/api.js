@@ -132,11 +132,15 @@ export const approvalsAPI = {
   cancel: (id) => data(api.post(`/approvals/${id}/cancel`)),
 };
 
+/** What the server has switched on (e.g. email). No login needed. */
+export const featuresAPI = { get: () => data(api.get("/features")) };
+
 export const signaturesAPI = {
   forContract: (contractId) => data(api.get(`/signatures/contract/${contractId}`)),
   send: (contractId, body) => data(api.post(`/signatures/contract/${contractId}`, body)),
   get: (id) => data(api.get(`/signatures/${id}`)),
-  newLink: (id, signerId) => data(api.post(`/signatures/${id}/signers/${signerId}/link`)),
+  newLink: (id, signerId, sendEmail = true) =>
+    data(api.post(`/signatures/${id}/signers/${signerId}/link`, null, { params: { send_email: sendEmail } })),
   cancel: (id) => data(api.post(`/signatures/${id}/cancel`)),
   signedPdf: (id) => api.get(`/signatures/${id}/signed-pdf`, { responseType: "blob", timeout: 120000 }),
 };

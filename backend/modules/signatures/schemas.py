@@ -12,6 +12,8 @@ class SignerIn(BaseModel):
 class EnvelopeCreate(BaseModel):
     signers: List[SignerIn] = Field(min_length=1, max_length=10)
     message: Optional[str] = Field(None, max_length=2000)
+    # Email each signer their link (only when email is set up on the server).
+    send_email: bool = True
 
 
 class SignBody(BaseModel):
@@ -35,6 +37,8 @@ class SignerOut(BaseModel):
     acted_at: Optional[datetime]
     ip_address: Optional[str]
     user_agent: Optional[str]
+    email_status: Optional[str] = None  # sent | failed | skipped | None (never emailed)
+    email_error: Optional[str] = None
 
 
 class EventOut(BaseModel):
@@ -63,6 +67,8 @@ class EnvelopeOut(BaseModel):
     events: Optional[List[EventOut]] = None
     # signer_id -> raw link token. Only present in the response that created it.
     links: Optional[Dict[str, str]] = None
+    # True when the links in this response are also being emailed.
+    emailed: Optional[bool] = None
 
 
 class PublicSigner(BaseModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { alertsAPI, analysisAPI, approvalsAPI, contractsAPI, obligationsAPI, signaturesAPI, workspacesAPI } from "./api";
+import { alertsAPI, analysisAPI, approvalsAPI, contractsAPI, featuresAPI, obligationsAPI, signaturesAPI, workspacesAPI } from "./api";
 import { useSession } from "./session";
 import { useWorkspaceId } from "./workspace";
 
@@ -206,6 +206,9 @@ export const useContractApprovals = (contractId, enabled = true) =>
     enabled: Boolean(contractId) && enabled,
   });
 
+export const useFeatures = () =>
+  useQuery({ queryKey: ["features"], queryFn: featuresAPI.get, staleTime: 10 * 60_000, retry: 1 });
+
 export const useContractSignatures = (contractId, enabled = true) =>
   useQuery({
     queryKey: ["contractSignatures", contractId],
@@ -222,8 +225,13 @@ export function useSignatureMutation(fn) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSettled: () =>
-      ["contractSignatures", "signature", "contracts", "contract"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+    onSettled: () => {
+      const refresh = () =>
+        ["contractSignatures", "signature", "contracts", "contract"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      refresh();
+      // Emails go out in the background just after the response; pick up their status.
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["contractSignatures"] }), 5000);
+    },
   });
 }
 

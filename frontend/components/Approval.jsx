@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { approvalsAPI, errorMessage } from "@/lib/api";
 import { formatDate, timeAgo } from "@/lib/format";
-import { useActiveWorkspace, useApprovalMutation, useContractApprovals, useMembers } from "@/lib/queries";
+import { useActiveWorkspace, useApprovalMutation, useContractApprovals, useFeatures, useMembers } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
 import { ROLE_LABELS } from "@/lib/workspace";
@@ -48,6 +48,7 @@ function ReviewerRow({ r }) {
 /* ---------------- request modal ---------------- */
 function RequestApproval({ open, onClose, contractId }) {
   const { active, userId } = useActiveWorkspace();
+  const emailOn = Boolean(useFeatures().data?.email);
   const { data: members = [], isLoading } = useMembers(open ? active?.id : null);
   const [picked, setPicked] = useState([]);
   const [note, setNote] = useState("");
@@ -81,7 +82,10 @@ function RequestApproval({ open, onClose, contractId }) {
   return (
     <Modal open={open} onClose={() => !create.isPending && onClose()} title="Request approval">
       <form onSubmit={submit} noValidate>
-        <p className="text-muted">Everyone you pick has to approve. One rejection sends it back to you.</p>
+        <p className="text-muted">
+          Everyone you pick has to approve. One rejection sends it back to you.
+          {emailOn && " Reviewers get an email, and you get one when it's decided."}
+        </p>
         <fieldset className="mt-4">
           <legend className="mb-1.5 text-sm font-medium">Reviewers</legend>
           {isLoading ? (

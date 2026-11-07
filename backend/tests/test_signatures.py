@@ -225,7 +225,7 @@ async def test_other_workspace_cannot_reach_envelope(make_user, db):
     assert (await mallory.post(f"{API}/signatures/{env['id']}/cancel")).status_code == 404
 
 
-def test_client_ip_skips_cloudflare_and_private_hops():
+async def test_client_ip_skips_cloudflare_and_private_hops():
     from types import SimpleNamespace
     from modules.signatures.service import client_info
 

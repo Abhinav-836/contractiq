@@ -78,9 +78,17 @@ async def lifespan(app: FastAPI):
     await recover_interrupted_analyses()
     await ensure_default_user()
 
+    from modules.notifications import mailer
+    email_provider = mailer.provider_name()
+    if email_provider in ("brevo", "resend") and not mailer.is_enabled():
+        logger.warning(
+            f"email.misconfigured provider={email_provider}: set EMAIL_FROM and "
+            f"{email_provider.upper()}_API_KEY, or emails won't be sent"
+        )
     logger.info(
         f"startup.ready db={'sqlite' if settings.is_sqlite else 'postgres'} "
-        f"origins={settings.allowed_origins_list}"
+        f"origins={settings.allowed_origins_list} "
+        f"email={email_provider if mailer.is_enabled() else 'off'} app_url={settings.app_url}"
     )
 
     yield

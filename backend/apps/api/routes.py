@@ -27,6 +27,13 @@ api_router.include_router(signatures_router, prefix="/signatures", tags=["Signat
 api_router.include_router(signing_router, prefix="/sign", tags=["Signatures"])
 
 
+@api_router.get("/features")
+async def features():
+    """What this server has switched on, so the frontend can adapt (no login needed)."""
+    from modules.notifications import mailer
+    return {"email": mailer.is_enabled()}
+
+
 @api_router.get("/health")
 async def health_check():
     return {

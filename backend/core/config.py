@@ -47,11 +47,45 @@ class Settings(BaseSettings):
     # Redis (optional)
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Email. Render's free plan blocks SMTP ports, so mail goes through an
+    # email service's HTTPS API. "none" (default) sends nothing; "console"
+    # logs instead of sending (local dev); "brevo" or "resend" send for real.
+    EMAIL_PROVIDER: str = "none"
+    EMAIL_FROM: Optional[str] = None          # verified sender, e.g. you@gmail.com (Brevo) or noreply@yourdomain.com (Resend)
+    EMAIL_FROM_NAME: str = "ContractIQ"
+    BREVO_API_KEY: Optional[str] = None
+    RESEND_API_KEY: Optional[str] = None
+    # Public address of the frontend, used for links in emails.
+    # Defaults to the first https origin in ALLOWED_ORIGINS.
+    APP_URL: Optional[str] = None
+    # Brevo's free plan allows 300 emails a day; stay under it, and stop one
+    # workspace from using ContractIQ to spam people.
+    EMAIL_DAILY_LIMIT: int = 280
+    EMAIL_DAILY_LIMIT_PER_WORKSPACE: int = 100
+
     @property
     def allowed_origins_list(self) -> List[str]:
         # A trailing slash ("https://app.vercel.app/") never matches the browser's
         # Origin header and silently breaks CORS — normalize it away.
         return [o.strip().rstrip("/") for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def app_url(self) -> str:
+        if self.APP_URL:
+            return self.APP_URL.rstrip("/")
+        origins = self.allowed_origins_list
+        return next((o for o in origins if o.startswith("https://")), origins[0] if origins else "http://localhost:3000")
+
+    @property
+    def email_enabled(self) -> bool:
+        provider = (self.EMAIL_PROVIDER or "none").lower()
+        if provider == "console":
+            return True
+        if provider == "brevo":
+            return bool(self.BREVO_API_KEY and self.EMAIL_FROM)
+        if provider == "resend":
+            return bool(self.RESEND_API_KEY and self.EMAIL_FROM)
+        return False
 
     @property
     def max_file_size_bytes(self) -> int:

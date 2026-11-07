@@ -43,6 +43,7 @@ Analysis runs in the background after upload; the contract shows as *processing*
 - **Roles** — *owner* (one per workspace), *admin* (invite people, manage members, delete any contract), *member* (upload, re-run reviews, update obligations and alerts, delete their own uploads), *viewer* (read-only)
 - **Approvals** — ask named people in the workspace to sign off a reviewed contract. Every reviewer must approve; one rejection (which needs a reason) sends it back. Reviewers can be any role, viewers included, so someone in finance can approve without being able to edit. The **Approvals** page lists what's waiting for you (with a count in the nav), what you asked for, and everything open; each contract shows its approval status and history
 - **E-signature (built in, free)** — send a reviewed contract to 1–10 people, teammates or outsiders. Each gets a private signing link (no account needed): they read the document, type their full name and tick a consent box, or decline with a reason. Everyone must sign; one decline closes it. Each signature records the time, IP address and browser, and the SHA-256 of the exact file sent is checked again at every signature. When everyone has signed there's a **signature certificate** with the full audit trail, and a **signed PDF** to download — the original pages with a footer naming the signing record, the certificate pages, and the original file attached unchanged so its SHA-256 can be checked. Signers can download it from their link too. The sender or an admin can cancel, or issue a new link if one is lost
+- **Email notifications (optional)** — when email is set up, signers get their private signing link by email (and a new email if a link is reissued), everyone gets the signed PDF attached when the last person signs, the sender hears about a decline with the reason, reviewers are emailed when their approval is needed and the requester when it's decided. Each signer shows *Emailed* or *Email failed*, successful sends appear in the signing audit trail, and links are still shown once so they can also be shared by hand. Sending happens after the change is saved, so a slow or failing email never breaks the action
 - **Invite links** — admins create links that join as a chosen role, expire after 1–30 days and can be limited to a number of people; links can be revoked, and only a hash of each link is stored
 
 ## Run locally
@@ -89,6 +90,13 @@ Backend settings are read from `backend/.env` (template: `.env.example`).
 | `MAX_FILE_SIZE_MB` | `20` | |
 | `SECRET_KEY`, `JWT_SECRET` | dev values | **Must** be changed when `APP_ENV=production` — the server refuses to start otherwise |
 | `SEED_DEV_USER` | `false` | `true` creates `test@example.com` / `test1234` on an empty database (local only) |
+| `EMAIL_PROVIDER` | `none` | `none` (off), `console` (log emails instead of sending — local dev), `brevo` or `resend` |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | — / `ContractIQ` | Sender address. Brevo: any address you've verified as a sender (a Gmail works). Resend: an address on a domain you've verified |
+| `BREVO_API_KEY` / `RESEND_API_KEY` | — | API key for the chosen provider |
+| `APP_URL` | first `https://` origin in `ALLOWED_ORIGINS` | Frontend address used for links in emails |
+| `EMAIL_DAILY_LIMIT` / `EMAIL_DAILY_LIMIT_PER_WORKSPACE` | `280` / `100` | Caps on emails sent in 24 hours (Brevo's free plan allows 300/day); emails over a cap are skipped and shown as not emailed |
+
+Email goes through the provider's HTTPS API, not SMTP: Render's free plan blocks outgoing SMTP ports (25, 465, 587).
 
 Frontend: `NEXT_PUBLIC_API_URL` — the backend URL, no trailing slash.
 
@@ -106,6 +114,7 @@ All routes are under `/api/v1`; everything except register, login and the invite
 | Workspaces | `GET/POST /workspaces`, `PATCH/DELETE /workspaces/{id}`, `GET /workspaces/{id}/members`, `PATCH/DELETE /workspaces/{id}/members/{user_id}` |
 | Invite links | `GET/POST /workspaces/{id}/invites`, `DELETE /workspaces/{id}/invites/{invite_id}`, `GET /invites/{token}` (public preview), `POST /invites/{token}/accept` |
 | Approvals | `GET /approvals?scope=waiting\|requested\|all&status=`, `GET /approvals/stats`, `GET/POST /approvals/contract/{contract_id}`, `POST /approvals/{id}/decision`, `POST /approvals/{id}/cancel` |
+| Features | `GET /features` → `{"email": true/false}` (no login) |
 | Signatures | `GET/POST /signatures/contract/{contract_id}`, `GET /signatures/{id}` (certificate + audit trail), `GET /signatures/{id}/signed-pdf`, `POST /signatures/{id}/signers/{signer_id}/link`, `POST /signatures/{id}/cancel` |
 | Signing (public, link token) | `GET /sign/{token}`, `GET /sign/{token}/document`, `GET /sign/{token}/signed-pdf`, `POST /sign/{token}/sign`, `POST /sign/{token}/decline` |
 | Status | `GET /health`, `GET /api/v1/llm/status` (active provider and fallback chain) |
@@ -117,9 +126,9 @@ Data routes (contracts, analysis, obligations, alerts) act on the workspace name
 ```
 backend/
   apps/api/        FastAPI app, routes, startup
-  modules/         users, workspaces, approvals, signatures, contracts, analysis, obligations, alerts (api / service / repository / models)
+  modules/         users, workspaces, approvals, signatures, notifications, contracts, analysis, obligations, alerts (api / service / repository / models)
   migrations/      Alembic migrations (run automatically on startup)
-  tests/           pytest: workspaces, roles, invites, approvals, signatures, access isolation
+  tests/           pytest: workspaces, roles, invites, approvals, signatures, email notifications, access isolation
   ai/agents/       parser → risk → obligation pipeline
   ai/llm/          Ollama, Gemini, OpenAI, mock clients + provider router
   ai/prompts/      risk analysis prompt (risk.yaml)
@@ -159,7 +168,8 @@ They use a throwaway SQLite database and the mock LLM. To run them against Postg
 - Ownership of a workspace can't be transferred yet.
 - Approval requests aren't emailed; reviewers see them in the app (Approvals page and nav count).
 - Re-running a review doesn't reset an earlier approval.
-- Signing links aren't emailed by ContractIQ; the sender copies them (or uses the "Email it" button, which opens their own mail app). Links are shown once and stored only as a hash.
+- Email is optional. Without it, the sender copies the signing links (or uses the "Email it" button, which opens their own mail app). Links are shown once and stored only as a hash, so an email can't be re-sent with an old link — use *New link* instead.
+- On Brevo's free plan, emails carry a small "Sent with Brevo" footer and are capped at 300 a day. Sending from a Gmail address through Brevo can land in spam for some recipients; a verified domain fixes that.
 - E-signature is a simple electronic signature with an audit trail — not an Aadhaar eSign or a certificate-based (DSC) digital signature. Whether it's enough for a given document depends on the law that applies to it; this isn't legal advice.
 - This is an AI review to speed up reading a contract, not legal advice.
 

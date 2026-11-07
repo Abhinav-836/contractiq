@@ -1,10 +1,11 @@
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db
 from modules.approvals import service
+from modules.notifications.service import Outbox, deliver
 from modules.approvals.schemas import ApprovalCreate, ApprovalDecision, ApprovalOut, ApprovalStatsOut
 from modules.workspaces.deps import current_workspace
 from modules.workspaces.permissions import WorkspaceContext
@@ -40,21 +41,33 @@ async def contract_approvals(
 async def request_approval(
     contract_id: str,
     body: ApprovalCreate,
+    background: BackgroundTasks,
     ctx: WorkspaceContext = Depends(current_workspace),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.create_request(db, ctx, contract_id, body.reviewer_ids, body.note)
+    outbox = Outbox()
+    out = await service.create_request(db, ctx, contract_id, body.reviewer_ids, body.note, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out
 
 
 @router.post("/{request_id}/decision", response_model=ApprovalOut)
 async def decide(
     request_id: str,
     body: ApprovalDecision,
+    background: BackgroundTasks,
     ctx: WorkspaceContext = Depends(current_workspace),
     db: AsyncSession = Depends(get_db),
 ):
     """Reviewers of any role (including viewers) can decide."""
-    return await service.decide(db, ctx, request_id, body.decision, body.comment)
+    outbox = Outbox()
+    out = await service.decide(db, ctx, request_id, body.decision, body.comment, outbox)
+    if outbox:
+        await db.commit()  # emails refer to these rows; save them before the background send
+        background.add_task(deliver, outbox)
+    return out
 
 
 @router.post("/{request_id}/cancel", response_model=ApprovalOut)

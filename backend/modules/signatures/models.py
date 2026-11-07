@@ -53,7 +53,7 @@ class SignatureEvent(Base):
     envelope_id = Column(
         String, ForeignKey("signature_envelopes.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # created | link_reissued | viewed | document_downloaded | signed | declined | completed | cancelled
+    # created | link_reissued | emailed | viewed | signed | declined | completed | cancelled
     type = Column(String, nullable=False)
     actor = Column(String, nullable=True)  # a person's name, as shown on the certificate
     detail = Column(Text, nullable=True)
