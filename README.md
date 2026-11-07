@@ -1,5 +1,7 @@
 # ContractIQ
 
+[![CI](https://github.com/Abhinav-836/contractiq/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinav-836/contractiq/actions/workflows/ci.yml)
+
 Upload a contract and get back a plain-English review: an executive summary, a 0–100 risk score, every important clause rated low / medium / high with the reason, the obligations you're signing up for (with due dates), and alerts for the parts that need attention before you sign.
 
 **Live:** [contractiq-ten.vercel.app](https://contractiq-ten.vercel.app)
@@ -147,7 +149,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-They use a throwaway SQLite database and the mock LLM. To run them against Postgres, point `TEST_DATABASE_URL` at an empty database.
+They use a throwaway SQLite database and the mock LLM. To run them against Postgres, point `TEST_DATABASE_URL` at an empty database. GitHub Actions runs them on every push against both SQLite and Postgres, checks that the migrations match the models, and builds the frontend (`.github/workflows/ci.yml`).
 
 ## Limitations
 
@@ -164,3 +166,7 @@ They use a throwaway SQLite database and the mock LLM. To run them against Postg
 ---
 
 Built by **Abhinav Ashutosh** · [GitHub](https://github.com/Abhinav-836)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
