@@ -38,7 +38,7 @@ Analysis runs in the background after upload; the contract shows as *processing*
 - **Obligations** — extracted automatically; filter, edit, mark complete
 - **Alerts** — created for high-risk clauses and high-priority obligations; mark read / read all
 - **Re-analyse** any contract (e.g. after configuring a better model)
-- **Accounts** — register / login with JWT; **Account settings** (from the avatar menu) to change your name, sign-in email and password — email and password changes need your current password
+- **Accounts** — register / login with JWT; **Account settings** (from the avatar menu) to change your name, sign-in email and password — email and password changes need your current password. **Forgot password** on the sign-in page emails a reset link (30 minutes, single use). New accounts and changed emails get a **confirm your email** link; until it's clicked you can still share signing and invite links yourself, but ContractIQ won't email outsiders on your behalf. Password and email changes send a notice to the account
 - **Team workspaces** — every account has a personal workspace; create shared ones for a team and switch between them from the header. Contracts, reviews, obligations and alerts belong to a workspace, and everyone in it sees the same ones
 - **Roles** — *owner* (one per workspace), *admin* (invite people, manage members, delete any contract), *member* (upload, re-run reviews, update obligations and alerts, delete their own uploads), *viewer* (read-only)
 - **Approvals** — ask named people in the workspace to sign off a reviewed contract. Every reviewer must approve; one rejection (which needs a reason) sends it back. Reviewers can be any role, viewers included, so someone in finance can approve without being able to edit. The **Approvals** page lists what's waiting for you (with a count in the nav), what you asked for, and everything open; each contract shows its approval status and history
@@ -106,7 +106,7 @@ All routes are under `/api/v1`; everything except register, login and the invite
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `PATCH /auth/me` (name, email, password) |
+| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `PATCH /auth/me` (name, email, password), `POST /auth/forgot-password`, `GET/POST /auth/reset-password`, `POST /auth/verify-email`, `POST /auth/resend-verification` |
 | Contracts | `GET /contracts`, `GET /contracts/stats`, `POST /contracts/upload`, `GET /contracts/{id}`, `POST /contracts/{id}/analyze`, `DELETE /contracts/{id}` |
 | Analysis | `GET /analysis/contract/{contract_id}`, `GET /analysis/{id}` |
 | Obligations | `GET /obligations`, `GET /obligations/stats`, `GET/PATCH/DELETE /obligations/{id}`, `PATCH /obligations/{id}/complete` |
@@ -128,7 +128,7 @@ backend/
   apps/api/        FastAPI app, routes, startup
   modules/         users, workspaces, approvals, signatures, notifications, contracts, analysis, obligations, alerts (api / service / repository / models)
   migrations/      Alembic migrations (run automatically on startup)
-  tests/           pytest: workspaces, roles, invites, approvals, signatures, email notifications, account settings, access isolation
+  tests/           pytest: workspaces, roles, invites, approvals, signatures, email notifications, account settings, password reset and email confirmation, access isolation
   ai/agents/       parser → risk → obligation pipeline
   ai/llm/          Ollama, Gemini, OpenAI, mock clients + provider router
   ai/prompts/      risk analysis prompt (risk.yaml)

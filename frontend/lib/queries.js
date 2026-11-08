@@ -209,6 +209,19 @@ export const useContractApprovals = (contractId, enabled = true) =>
 export const useFeatures = () =>
   useQuery({ queryKey: ["features"], queryFn: featuresAPI.get, staleTime: 10 * 60_000, retry: 1 });
 
+/**
+ * Whether the signed-in person may send emails from ContractIQ. With email
+ * switched off there is nothing to confirm, so everyone counts as confirmed.
+ * Users stored before this field existed count as confirmed until refreshed.
+ */
+export function useEmailStatus() {
+  const { data: features } = useFeatures();
+  const session = useSession();
+  const emailOn = Boolean(features?.email);
+  const user = session?.user;
+  return { emailOn, verified: !emailOn || user?.email_verified !== false, email: user?.email };
+}
+
 export const useContractSignatures = (contractId, enabled = true) =>
   useQuery({
     queryKey: ["contractSignatures", contractId],

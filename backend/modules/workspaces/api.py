@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.dependencies import get_db
 from core.security import require_auth
 from modules.notifications.service import Outbox, deliver
+from modules.users.account import require_verified_email
 from modules.workspaces import service
 from modules.workspaces.deps import workspace_from_path
 from modules.workspaces.permissions import WorkspaceContext
@@ -109,6 +110,8 @@ async def create_invite(
     ctx: WorkspaceContext = Depends(workspace_from_path),
     db: AsyncSession = Depends(get_db),
 ):
+    if body.email:
+        await require_verified_email(db, ctx.user_id)
     outbox = Outbox() if body.email else None
     out = await service.create_invite(db, ctx, body.role, body.expires_in_days, body.max_uses, body.email, outbox)
     if outbox:  # create_invite has already committed

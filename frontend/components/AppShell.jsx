@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { authAPI } from "@/lib/api";
+import { authAPI, errorMessage } from "@/lib/api";
 import { clearSession, saveSession, useSession } from "@/lib/session";
-import { useActiveWorkspace, useAlertStats, useApprovalStats } from "@/lib/queries";
+import { useActiveWorkspace, useAlertStats, useApprovalStats, useEmailStatus } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { setWorkspaceId } from "@/lib/workspace";
 import Logo from "./Logo";
@@ -133,12 +133,21 @@ export default function AppShell({ children }) {
     if (session === null) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [session, pathname, router]);
 
-  // Tabs signed in by the old app have a token but no stored user.
+  // Keep the stored user fresh: tabs signed in by the old app have none, and
+  // an email confirmed from the link (in another tab) should show up here.
+  const token = session?.token;
   useEffect(() => {
-    if (session?.token && !session.user) {
-      authAPI.me().then((u) => u && saveSession(session.token, u)).catch(() => {});
-    }
-  }, [session]);
+    if (!token) return undefined;
+    const refresh = () =>
+      authAPI
+        .me()
+        .then((u) => u && saveSession(token, u))
+        .catch(() => {});
+    refresh();
+    const onVisible = () => document.visibilityState === "visible" && refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [token]);
 
   if (!session) {
     return (
@@ -199,10 +208,38 @@ export default function AppShell({ children }) {
           You have view-only access to <span className="font-semibold text-ink">{active.name}</span>.
         </p>
       )}
+      <ConfirmEmailBanner />
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         {children}
       </main>
       <SignatureFooter app />
     </div>
+  );
+}
+
+/** Shown until the signed-in person confirms their email address. */
+function ConfirmEmailBanner() {
+  const { emailOn, verified, email } = useEmailStatus();
+  const [busy, setBusy] = useState(false);
+  if (!emailOn || verified) return null;
+  const resend = async () => {
+    setBusy(true);
+    try {
+      const out = await authAPI.resendVerification();
+      toast(`Sent a new link to ${out.sent_to}.`, "success");
+    } catch (err) {
+      toast(errorMessage(err, "Couldn't send the email."), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <p role="status" className="no-print border-b border-rule bg-pen/5 px-4 py-2.5 text-center text-sm">
+      Confirm your email to send signing requests and invites — we sent a link to{" "}
+      <span className="font-semibold">{email}</span>.{" "}
+      <button type="button" onClick={resend} disabled={busy} className="font-semibold text-pen underline underline-offset-4 disabled:opacity-60">
+        {busy ? "Sending…" : "Resend email"}
+      </button>
+    </p>
   );
 }

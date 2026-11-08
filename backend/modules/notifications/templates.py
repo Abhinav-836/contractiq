@@ -164,3 +164,57 @@ def workspace_invite(inviter_name, workspace_name, role, url, expires_label):
     text = _text([f"{inviter_name} invited you to join \"{workspace_name}\" on ContractIQ as {role_label}.",
                   f"Accept the invite: {url}", f"The invite expires {expires_label}."])
     return subject, html, text
+
+
+# ── Account ───────────────────────────────────────────────────────────────
+
+def verify_email(name, url):
+    e = escape
+    subject = "Confirm your email for ContractIQ"
+    paras = [f"Hi {e(name)},",
+             "Confirm this is your email address so you can send signing requests and invites from ContractIQ.",
+             "The link works for 48 hours."]
+    html = _layout("Confirm your email", paras, ("Confirm email", url),
+                   "If you didn't create a ContractIQ account or change your email, you can ignore this.")
+    text = _text([f"Hi {name},", "Confirm this is your email address for ContractIQ:", url,
+                  "The link works for 48 hours. If this wasn't you, ignore this email."])
+    return subject, html, text
+
+
+def password_reset(name, url):
+    e = escape
+    subject = "Reset your ContractIQ password"
+    paras = [f"Hi {e(name)},",
+             "Someone (hopefully you) asked to reset the password for your ContractIQ account.",
+             "The link works for 30 minutes and only once."]
+    html = _layout("Reset your password", paras, ("Choose a new password", url),
+                   "If you didn't ask for this, ignore this email — your password stays the same.")
+    text = _text([f"Hi {name},", "Reset your ContractIQ password with this link (works for 30 minutes, once):", url,
+                  "If you didn't ask for this, ignore this email — your password stays the same."])
+    return subject, html, text
+
+
+def email_changed(name, old_email, new_email):
+    e = escape
+    subject = "Your ContractIQ email was changed"
+    paras = [f"Hi {e(name)},",
+             f"The sign-in email for your ContractIQ account was changed from <strong>{e(old_email)}</strong> "
+             f"to <strong>{e(new_email)}</strong>.",
+             "If you did this, there's nothing to do. If you didn't, someone may have your password — "
+             "reply to this email or contact the workspace owner straight away."]
+    html = _layout("Your sign-in email changed", paras, None,
+                   "This was sent to your old address so you know about the change.")
+    text = _text([f"Hi {name},", f"Your ContractIQ sign-in email was changed from {old_email} to {new_email}.",
+                  "If this wasn't you, someone may have your password. Act straight away."])
+    return subject, html, text
+
+
+def password_changed(name):
+    e = escape
+    subject = "Your ContractIQ password was changed"
+    paras = [f"Hi {e(name)},", "The password for your ContractIQ account was just changed.",
+             "If this wasn't you, reset it straight away with “Forgot password” on the sign-in page."]
+    html = _layout("Your password changed", paras, None, "Sent so you know about changes to your account.")
+    text = _text([f"Hi {name},", "Your ContractIQ password was just changed.",
+                  "If this wasn't you, reset it with “Forgot password” on the sign-in page."])
+    return subject, html, text

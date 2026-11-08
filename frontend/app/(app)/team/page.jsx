@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage, workspacesAPI } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import { useActiveWorkspace, useFeatures, useInvites, useMembers, useWorkspaceMutation } from "@/lib/queries";
+import { useActiveWorkspace, useEmailStatus, useInvites, useMembers, useWorkspaceMutation } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { ROLE_HELP, ROLE_LABELS, setWorkspaceId } from "@/lib/workspace";
 import { ConfirmDelete } from "@/components/Modal";
@@ -204,8 +204,8 @@ function Invites({ workspace, myRole }) {
   const create = useWorkspaceMutation((body) => workspacesAPI.createInvite(workspace.id, body));
   const revoke = useWorkspaceMutation((id) => workspacesAPI.revokeInvite(workspace.id, id));
   const roles = grantable(myRole);
-  const { data: features } = useFeatures();
-  const emailOn = Boolean(features?.email);
+  const { emailOn: serverEmail, verified } = useEmailStatus();
+  const emailOn = serverEmail && verified;
   const [form, setForm] = useState({ role: "member", expires_in_days: 7, max_uses: "", email: "" });
   const [link, setLink] = useState(null); // { url, role, emailedTo } — the token is shown only once
   const [copied, setCopied] = useState(false);
@@ -288,6 +288,9 @@ function Invites({ workspace, myRole }) {
             ))}
           </select>
         </div>
+        {serverEmail && !verified && (
+          <p className="text-sm text-muted sm:col-span-3">Confirm your email address to send invites by email. You can still copy the link.</p>
+        )}
         {emailOn && (
           <div className="sm:col-span-3">
             <label htmlFor="inv-email" className="mb-1.5 block text-sm font-medium">

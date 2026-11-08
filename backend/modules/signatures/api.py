@@ -6,6 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db
+from modules.users.account import email_verified, require_verified_email
 from modules.notifications.service import Outbox, deliver
 from modules.signatures import service
 from modules.signatures.schemas import DeclineBody, EnvelopeCreate, EnvelopeOut, PublicSigningOut, SignBody
@@ -37,6 +38,8 @@ async def send_for_signing(
 ):
     """Members and above. The response carries each signer's link token once."""
     signers = [s.model_dump() for s in body.signers]
+    if body.send_email:
+        await require_verified_email(db, ctx.user_id)
     outbox = Outbox() if body.send_email else None
     out = await service.create_envelope(db, ctx, contract_id, signers, body.message, request, outbox)
     if outbox:
@@ -84,6 +87,10 @@ async def new_link(
     db: AsyncSession = Depends(get_db),
 ):
     """Replace a signer's link (e.g. it was lost or sent to the wrong person)."""
+    if reminder:
+        await require_verified_email(db, ctx.user_id)
+    elif send_email and not await email_verified(db, ctx.user_id):
+        send_email = False  # still make the link; it just isn't emailed until they confirm their address
     outbox = Outbox() if (send_email or reminder) else None
     out = await service.reissue_link(db, ctx, envelope_id, signer_id, request, outbox, reminder=reminder)
     if outbox:

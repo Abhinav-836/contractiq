@@ -79,7 +79,7 @@ class User:
 
 @pytest.fixture
 def make_user(client):
-    async def _make(name: str = "User") -> User:
+    async def _make(name: str = "User", verified: bool = True) -> User:
         _counter["n"] += 1
         email = f"{name.lower()}{_counter['n']}@example.com"
         r = await client.post(
@@ -87,6 +87,18 @@ def make_user(client):
         )
         assert r.status_code == 201, r.text
         body = r.json()
+        if verified:  # most tests aren't about email confirmation
+            from datetime import datetime, timezone
+            from sqlalchemy import update
+            from modules.users.models import User as UserRow
+            async with AsyncSessionLocal() as db:
+                await db.execute(update(UserRow).where(UserRow.id == body["user"]["id"])
+                                 .values(email_verified_at=datetime.now(timezone.utc)))
+                await db.commit()
+            # …and drop the confirmation email signup sent, so outbox counts stay about the test
+            from modules.notifications import mailer
+            mailer.OUTBOX[:] = [m for m in mailer.OUTBOX
+                                if not (m["to"] == email and m["subject"].startswith("Confirm your email"))]
         return User(client, body["user"]["id"], body["access_token"], name)
 
     return _make

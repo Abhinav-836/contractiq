@@ -66,6 +66,11 @@ export const authAPI = {
   register: (body) => data(api.post("/auth/register", body)),
   me: () => data(api.get("/auth/me")),
   updateMe: (body) => data(api.patch("/auth/me", body)),
+  forgotPassword: (email) => data(api.post("/auth/forgot-password", { email })),
+  checkResetLink: (token) => data(api.get(`/auth/reset-password/${encodeURIComponent(token)}`)),
+  resetPassword: (token, newPassword) => data(api.post("/auth/reset-password", { token, new_password: newPassword })),
+  verifyEmail: (token) => data(api.post("/auth/verify-email", { token })),
+  resendVerification: () => data(api.post("/auth/resend-verification")),
 };
 
 export const contractsAPI = {

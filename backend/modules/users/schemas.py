@@ -27,9 +27,23 @@ class UserOut(BaseModel):
     name: str
     role: str
     is_active: bool
+    email_verified: bool = False
 
     class Config:
         from_attributes = True
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class ResetPassword(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmail(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
 
 
 class TokenOut(BaseModel):

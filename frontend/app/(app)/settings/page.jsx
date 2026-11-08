@@ -78,7 +78,12 @@ function EmailForm({ user }) {
     setBusy(true);
     try {
       const u = await update({ email: email.trim(), current_password: password });
-      toast(`Email changed to ${u.email}. Use it next time you sign in.`, "success");
+      toast(
+        u.email_verified === false
+          ? `Email changed to ${u.email}. Use it to sign in — and click the link we sent there to confirm it.`
+          : `Email changed to ${u.email}. Use it next time you sign in.`,
+        "success",
+      );
       setEmail("");
       setPassword("");
     } catch (err) {

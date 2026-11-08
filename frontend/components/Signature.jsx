@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { errorMessage, saveBlob, signaturesAPI, signingLink } from "@/lib/api";
 import { formatDate, timeAgo } from "@/lib/format";
-import { useActiveWorkspace, useContractSignatures, useFeatures, useMembers, useSignatureMutation } from "@/lib/queries";
+import { useActiveWorkspace, useContractSignatures, useEmailStatus, useMembers, useSignatureMutation } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
 import Modal from "./Modal";
@@ -188,8 +188,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
   const { active } = useActiveWorkspace();
-  const { data: features } = useFeatures();
-  const emailOn = Boolean(features?.email);
+  const { emailOn: serverEmail, verified } = useEmailStatus();
+  const emailOn = serverEmail && verified; // can't email signers until your own address is confirmed
   const [sendEmail, setSendEmail] = useState(true);
   const { data: members = [] } = useMembers(open ? active?.id : null);
   const [rows, setRows] = useState([blank()]);
@@ -333,6 +333,12 @@ function SendForSigning({ open, onClose, contractId, approvalStatus, onSent }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+        {serverEmail && !verified && (
+          <p className="mt-4 rounded-md bg-bg px-3 py-2 text-sm text-muted">
+            Confirm your email address (see the banner at the top) to have ContractIQ email the links. For now you&apos;ll get the
+            links to share yourself.
+          </p>
+        )}
         {emailOn && (
           <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm">
             <input
@@ -374,8 +380,8 @@ export default function SignaturePanel({ contractId, contractStatus, approvalSta
   const cancel = useSignatureMutation((id) => signaturesAPI.cancel(id));
   const reissue = useSignatureMutation(({ id, signerId }) => signaturesAPI.newLink(id, signerId));
   const remind = useSignatureMutation(({ id, signerId }) => signaturesAPI.remind(id, signerId));
-  const { data: features } = useFeatures();
-  const emailOn = Boolean(features?.email);
+  const { emailOn: serverEmail, verified } = useEmailStatus();
+  const emailOn = serverEmail && verified;
 
   const open = envelopes[0]?.status === "pending" ? envelopes[0] : null;
   const latestClosed = open ? null : envelopes.find((e) => e.status !== "cancelled") || null;

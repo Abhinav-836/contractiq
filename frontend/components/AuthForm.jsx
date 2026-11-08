@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { authAPI, errorMessage } from "@/lib/api";
+import { useFeatures } from "@/lib/queries";
 import { saveSession, useSession } from "@/lib/session";
 import { toast } from "@/lib/toast";
 import { track } from "@/lib/track";
@@ -43,6 +44,7 @@ export default function AuthForm({ mode }) {
   const session = useSession();
   const qc = useQueryClient();
   const next = safeNext(params.get("next"));
+  const { data: features } = useFeatures();
 
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [errors, setErrors] = useState({});
@@ -82,7 +84,15 @@ export default function AuthForm({ mode }) {
       qc.clear(); // drop anything cached from a previous account in this tab
       saveSession(res.access_token, res.user);
       track(isRegister ? "signed_up" : "signed_in");
-      toast(isRegister ? `Account created. Welcome, ${res.user?.name?.split(" ")[0] || "there"}.` : `Welcome back, ${res.user?.name?.split(" ")[0] || "there"}.`, "success");
+      const first = res.user?.name?.split(" ")[0] || "there";
+      toast(
+        isRegister
+          ? res.user?.email_verified === false
+            ? `Account created, ${first}. We emailed ${res.user.email} a link to confirm it.`
+            : `Account created. Welcome, ${first}.`
+          : `Welcome back, ${first}.`,
+        "success",
+      );
       // A new account goes straight to its first upload — unless it came from
       // a link (e.g. an invite) that asked to come back.
       router.replace(isRegister && !params.get("next") ? "/contracts/upload" : next);
@@ -123,6 +133,14 @@ export default function AuthForm({ mode }) {
               hint={isRegister ? "At least 8 characters." : undefined}
               maxLength={128}
             />
+
+            {!isRegister && features?.email && (
+              <p className="-mt-2 text-right text-sm">
+                <Link href="/forgot-password" className="font-semibold text-pen underline-offset-4 hover:underline">
+                  Forgot password?
+                </Link>
+              </p>
+            )}
 
             {formError && (
               <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-sm text-danger">
