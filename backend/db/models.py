@@ -12,3 +12,4 @@ def import_all_models() -> None:
     import modules.approvals.models    # noqa: F401
     import modules.signatures.models   # noqa: F401
     import modules.notifications.models  # noqa: F401
+    import modules.usage.models        # noqa: F401

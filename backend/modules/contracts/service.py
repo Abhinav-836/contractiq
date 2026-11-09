@@ -17,6 +17,7 @@ from modules.contracts.repository import ContractRepository
 from modules.workspaces.permissions import WorkspaceContext
 from modules.analysis.repository import AnalysisRepository
 from modules.analysis.orchestrator import orchestrate_analysis
+from modules.usage.service import claim_ai_review
 from ingestion.parser import extract_text, ExtractionError
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,10 @@ class ContractService:
 
         logger.info(f"contracts.upload filename={filename} bytes={len(content)} ext={ext}")
 
+        # Daily AI limits: checked before anything is stored, so a refused
+        # upload leaves no half-made contract behind.
+        await claim_ai_review(self.db, ctx.user_id)
+
         contract = await self.repo.create(
             filename=filename,
             file_type=ext,
@@ -100,7 +105,7 @@ class ContractService:
             "message": "Contract uploaded. AI analysis started.",
         }
 
-    async def reanalyze(self, contract: Contract, background_tasks: BackgroundTasks):
+    async def reanalyze(self, contract: Contract, background_tasks: BackgroundTasks, user_id: str):
         if contract.status == "processing":
             raise HTTPException(409, "Analysis is already running for this contract")
         if await load_file_bytes(self.db, contract.id, contract.file_path) is None:
@@ -108,6 +113,7 @@ class ContractService:
             raise HTTPException(
                 410, "The original file is no longer on the server. Please upload the contract again."
             )
+        await claim_ai_review(self.db, user_id, contract.id)
         await self.repo.update_status(contract.id, "processing")
         await self.db.commit()
         background_tasks.add_task(_run_analysis_task, contract.id, contract.file_type, contract.filename)

@@ -61,7 +61,7 @@ async def trigger_analysis(
 ):
     service = ContractService(db)
     contract = await service.get_in_workspace(contract_id, ctx.workspace_id)
-    return await service.reanalyze(contract, background_tasks)
+    return await service.reanalyze(contract, background_tasks, ctx.user_id)
 
 
 @router.delete("/{contract_id}")

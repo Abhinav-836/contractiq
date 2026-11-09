@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     EMAIL_DAILY_LIMIT: int = 280
     EMAIL_DAILY_LIMIT_PER_WORKSPACE: int = 100
 
+    # AI review limits per rolling 24 hours (0 = no limit). See modules/usage/service.py
+    AI_REVIEWS_PER_USER_DAILY: int = 5
+    AI_REVIEWS_DAILY_TOTAL: int = 200
+
     @property
     def allowed_origins_list(self) -> List[str]:
         # A trailing slash ("https://app.vercel.app/") never matches the browser's
