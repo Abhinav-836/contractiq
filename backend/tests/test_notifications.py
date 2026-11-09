@@ -49,13 +49,13 @@ SIGNERS = [{"name": "Priya Sharma", "email": "priya@vendor.in"}, {"name": "Ravi 
 
 async def test_features_endpoint(client, monkeypatch):
     monkeypatch.setattr(settings, "EMAIL_PROVIDER", "none")
-    assert (await client.get(f"{API}/features")).json() == {"email": False}
+    assert (await client.get(f"{API}/features")).json()["email"] is False
     monkeypatch.setattr(settings, "EMAIL_PROVIDER", "brevo")
     monkeypatch.setattr(settings, "BREVO_API_KEY", None)
-    assert (await client.get(f"{API}/features")).json() == {"email": False}  # half set up = off
+    assert (await client.get(f"{API}/features")).json()["email"] is False  # half set up = off
     monkeypatch.setattr(settings, "BREVO_API_KEY", "key")
     monkeypatch.setattr(settings, "EMAIL_FROM", "me@example.com")
-    assert (await client.get(f"{API}/features")).json() == {"email": True}
+    assert (await client.get(f"{API}/features")).json()["email"] is True
 
 
 async def test_signing_links_are_emailed(make_user, db, client, outbox):

@@ -31,7 +31,7 @@ api_router.include_router(signing_router, prefix="/sign", tags=["Signatures"])
 async def features():
     """What this server has switched on, so the frontend can adapt (no login needed)."""
     from modules.notifications import mailer
-    return {"email": mailer.is_enabled()}
+    return {"email": mailer.is_enabled(), "google_client_id": settings.GOOGLE_CLIENT_ID or None}
 
 
 @api_router.get("/health")

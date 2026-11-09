@@ -1,15 +1,17 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from core.dependencies import get_db
 from core.security import create_access_token, hash_password, require_auth, verify_password
 from modules.notifications import templates
 from modules.notifications.mailer import is_enabled as email_enabled
 from modules.notifications.service import Outbox, deliver
-from modules.users import account
-from modules.users.repository import UserRepository
+from modules.users import account, google
+from modules.users.repository import NO_PASSWORD, UserRepository
 from modules.users.schemas import (
-    ForgotPassword, ResetPassword, TokenOut, UserLogin, UserOut, UserRegister, UserUpdate, VerifyEmail,
+    ForgotPassword, GoogleLogin, GoogleTokenOut, ResetPassword, TokenOut, UserLogin, UserOut, UserRegister,
+    UserUpdate, VerifyEmail,
 )
 from modules.workspaces.service import create_personal_workspace
 
@@ -47,11 +49,60 @@ async def register(body: UserRegister, background: BackgroundTasks, db: AsyncSes
 async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     repo = UserRepository(db)
     user = await repo.get_by_email(body.email)
+    if user and not user.has_password:
+        raise HTTPException(
+            401, "This account signs in with Google. Use \"Continue with Google\", or set a password with \"Forgot password\"."
+        )
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(401, "Invalid email or password")
     if not user.is_active:
         raise HTTPException(403, "Account is disabled")
     return _token_out(user)
+
+
+@router.post("/google", response_model=GoogleTokenOut)
+async def google_sign_in(body: GoogleLogin, db: AsyncSession = Depends(get_db)):
+    """
+    Sign in (or sign up) with the ID token from Google's button.
+
+    1. Someone who used Google before is found by Google's ID for them, even
+       if they've since changed their ContractIQ email.
+    2. Otherwise an existing account with the same email is linked to Google,
+       since Google has proved this person owns the address.
+    3. Otherwise a new account is made, with no password and the email
+       already confirmed.
+    """
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(404, "Google sign-in isn't set up on this server.")
+    claims = await google.verify_id_token(body.credential, settings.GOOGLE_CLIENT_ID)
+    sub, email = str(claims["sub"]), str(claims["email"]).lower().strip()
+    name = " ".join(str(claims.get("name") or "").split())[:100] or email.split("@")[0]
+
+    repo = UserRepository(db)
+    created = False
+    user = await repo.get_by_google_sub(sub)
+    if user is None:
+        user = await repo.get_by_email(email)
+        if user is not None:
+            if user.google_sub and user.google_sub != sub:
+                raise HTTPException(409, "This email is already linked to a different Google account.")
+            if user.email_verified_at is None:
+                # Nobody ever proved they own this address, so a password set on
+                # it could belong to someone else who registered it first.
+                # Google has now proved who owns it: that password stops working.
+                user.hashed_password = NO_PASSWORD
+                user.email_verified_at = account.utcnow()
+            user.google_sub = sub
+            await db.flush()
+        else:
+            user = await repo.create_google(email, name, sub, account.utcnow())
+            await create_personal_workspace(db, user)
+            created = True
+
+    if not user.is_active:
+        raise HTTPException(403, "Account is disabled")
+    token = create_access_token(user.id, {"email": user.email, "name": user.name})
+    return GoogleTokenOut(access_token=token, user=UserOut.model_validate(user), created=created)
 
 
 @router.get("/me", response_model=UserOut)
@@ -73,6 +124,9 @@ async def update_me(
     the current password. Returns a fresh token, since the token carries the
     email and name. A new email has to be confirmed again, and the old
     address is told about the change.
+
+    Accounts made with Google have no password: they can set one here
+    without a current password, and must do that before changing their email.
     """
     repo = UserRepository(db)
     user = await repo.get_by_id(user_id)
@@ -81,7 +135,9 @@ async def update_me(
 
     new_email = body.email.lower().strip() if body.email else None
     changing_email = bool(new_email and new_email != user.email)
-    if (changing_email or body.new_password) and not (
+    if changing_email and not user.has_password:
+        raise HTTPException(400, "Set a password first, then you can change your email.")
+    if user.has_password and (changing_email or body.new_password) and not (
         body.current_password and verify_password(body.current_password, user.hashed_password)
     ):
         raise HTTPException(403, "Your current password is wrong")

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 10080
 
+    # Google sign-in: the OAuth "Web application" client ID from Google Cloud
+    # (ends in .apps.googleusercontent.com). Empty = the Google button is hidden.
+    GOOGLE_CLIENT_ID: Optional[str] = None
+
     # Create test@example.com / test1234 on an empty DB (local dev only)
     SEED_DEV_USER: bool = False
 

@@ -101,6 +101,9 @@ function EmailForm({ user }) {
       <p className="mb-4 text-sm">
         Current: <span className="font-medium">{user?.email}</span>
       </p>
+      {user?.has_password === false ? (
+        <p className="text-sm text-muted">You sign in with Google. To change this email, first set a password below.</p>
+      ) : (
       <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
         <Field id="acc-email" label="New email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         <Field
@@ -118,11 +121,14 @@ function EmailForm({ user }) {
           </button>
         </div>
       </form>
+      )}
     </Section>
   );
 }
 
-function PasswordForm() {
+function PasswordForm({ user }) {
+  // Accounts made with Google have no password yet: they set a first one.
+  const first = user?.has_password === false;
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
   const [busy, setBusy] = useState(false);
   const mismatch = form.confirm && form.next !== form.confirm;
@@ -132,8 +138,8 @@ function PasswordForm() {
     if (form.next !== form.confirm) return;
     setBusy(true);
     try {
-      await update({ new_password: form.next, current_password: form.current });
-      toast("Password changed.", "success");
+      await update(first ? { new_password: form.next } : { new_password: form.next, current_password: form.current });
+      toast(first ? "Password set. You can now also sign in with your email and this password." : "Password changed.", "success");
       setForm({ current: "", next: "", confirm: "" });
     } catch (err) {
       toast(errorMessage(err, "Couldn't change your password."), "error");
@@ -144,9 +150,14 @@ function PasswordForm() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   return (
-    <Section title="Password">
-      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-3">
-        <Field id="pw-current" label="Current password" type="password" value={form.current} onChange={set("current")} required autoComplete="current-password" />
+    <Section
+      title={first ? "Set a password" : "Password"}
+      sub={first ? "You sign in with Google. Add a password if you also want to sign in with your email." : undefined}
+    >
+      <form onSubmit={submit} className={`grid gap-3 ${first ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        {!first && (
+          <Field id="pw-current" label="Current password" type="password" value={form.current} onChange={set("current")} required autoComplete="current-password" />
+        )}
         <Field
           id="pw-new"
           label="New password"
@@ -169,9 +180,13 @@ function PasswordForm() {
           autoComplete="new-password"
           hint={mismatch ? "The passwords don't match." : undefined}
         />
-        <div className="sm:col-span-3">
-          <button type="submit" className="btn btn-primary" disabled={busy || !form.current || form.next.length < 8 || form.next !== form.confirm}>
-            {busy && <Spinner />} Change password
+        <div className={first ? "sm:col-span-2" : "sm:col-span-3"}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busy || (!first && !form.current) || form.next.length < 8 || form.next !== form.confirm}
+          >
+            {busy && <Spinner />} {first ? "Set password" : "Change password"}
           </button>
         </div>
       </form>
@@ -190,7 +205,7 @@ export default function SettingsPage() {
       </div>
       <ProfileForm user={user} />
       <EmailForm user={user} />
-      <PasswordForm />
+      <PasswordForm user={user} />
     </div>
   );
 }

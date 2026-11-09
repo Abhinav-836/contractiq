@@ -20,7 +20,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// A 401 on anything but login/register means the session expired: sign out
+// A 401 on anything but login/register/Google sign-in means the session expired: sign out
 // and send the user to the sign-in page, remembering where they were.
 api.interceptors.response.use(undefined, (err) => {
   const url = err.config?.url || "";
@@ -32,7 +32,8 @@ api.interceptors.response.use(undefined, (err) => {
   // Only a request that carried a token can mean "session expired"; a
   // signed-out request is the page guard's job, not this one.
   const hadToken = Boolean(err.config?.headers?.Authorization);
-  if (err.response?.status === 401 && hadToken && !url.includes("/auth/login") && !url.includes("/auth/register")) {
+  const signInCall = ["/auth/login", "/auth/register", "/auth/google"].some((p) => url.includes(p));
+  if (err.response?.status === 401 && hadToken && !signInCall) {
     clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       const next = encodeURIComponent(window.location.pathname);
@@ -64,6 +65,7 @@ const data = (p) => p.then((r) => r.data);
 export const authAPI = {
   login: (email, password) => data(api.post("/auth/login", { email, password })),
   register: (body) => data(api.post("/auth/register", body)),
+  google: (credential) => data(api.post("/auth/google", { credential })),
   me: () => data(api.get("/auth/me")),
   updateMe: (body) => data(api.patch("/auth/me", body)),
   forgotPassword: (email) => data(api.post("/auth/forgot-password", { email })),

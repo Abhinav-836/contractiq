@@ -8,6 +8,9 @@ from core.security import hash_password
 from db.base import gen_uuid
 from modules.users.models import User
 
+# Stored instead of a bcrypt hash for accounts without a password. It can never match.
+NO_PASSWORD = "!google"
+
 
 class UserRepository:
     def __init__(self, db: AsyncSession):
@@ -25,6 +28,26 @@ class UserRepository:
         self.db.add(user)
         await self.db.flush()
         return user
+
+    async def create_google(self, email: str, name: str, google_sub: str, verified_at: datetime) -> User:
+        """An account made with Google sign-in: no password, email already verified by Google."""
+        user = User(
+            id=gen_uuid(),
+            email=email.lower().strip(),
+            name=name.strip(),
+            hashed_password=NO_PASSWORD,
+            role="user",
+            is_active=True,
+            google_sub=google_sub,
+            email_verified_at=verified_at,
+        )
+        self.db.add(user)
+        await self.db.flush()
+        return user
+
+    async def get_by_google_sub(self, google_sub: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.google_sub == google_sub))
+        return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Optional[User]:
         result = await self.db.execute(

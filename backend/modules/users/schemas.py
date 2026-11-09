@@ -28,6 +28,8 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     email_verified: bool = False
+    # False for accounts made with Google that haven't set a password yet.
+    has_password: bool = True
 
     class Config:
         from_attributes = True
@@ -46,7 +48,17 @@ class VerifyEmail(BaseModel):
     token: str = Field(min_length=10, max_length=200)
 
 
+class GoogleLogin(BaseModel):
+    # The ID token (JWT) that Google's sign-in button hands the browser.
+    credential: str = Field(min_length=20, max_length=4096)
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class GoogleTokenOut(TokenOut):
+    # True when this sign-in created the account.
+    created: bool = False

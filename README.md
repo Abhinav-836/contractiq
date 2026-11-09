@@ -95,6 +95,7 @@ Backend settings are read from `backend/.env` (template: `.env.example`).
 | `BREVO_API_KEY` / `RESEND_API_KEY` | — | API key for the chosen provider |
 | `APP_URL` | first `https://` origin in `ALLOWED_ORIGINS` | Frontend address used for links in emails |
 | `EMAIL_DAILY_LIMIT` / `EMAIL_DAILY_LIMIT_PER_WORKSPACE` | `280` / `100` | Caps on emails sent in 24 hours (Brevo's free plan allows 300/day); emails over a cap are skipped and shown as not emailed |
+| `GOOGLE_CLIENT_ID` | — | Turns on "Continue with Google". OAuth client ID (type *Web application*) from Google Cloud Console; add your frontend URL under *Authorized JavaScript origins*. The frontend reads it from `/api/v1/features`, so nothing is needed on Vercel |
 
 Email goes through the provider's HTTPS API, not SMTP: Render's free plan blocks outgoing SMTP ports (25, 465, 587).
 
@@ -102,7 +103,7 @@ Frontend: `NEXT_PUBLIC_API_URL` — the backend URL, no trailing slash.
 
 ## API
 
-All routes are under `/api/v1`; everything except register, login and the invite preview needs a `Bearer` token. Full interactive docs at `/docs`.
+All routes are under `/api/v1`; everything except register, login, Google sign-in and the invite preview needs a `Bearer` token. Full interactive docs at `/docs`.
 
 | Area | Endpoints |
 |---|---|

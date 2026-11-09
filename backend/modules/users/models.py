@@ -9,17 +9,24 @@ class User(Base):
     id = Column(String, primary_key=True, default=gen_uuid)
     email = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
+    # "!google" for accounts made with Google sign-in, which have no password yet.
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
     # Set when the person clicks the link emailed to this address; cleared when the email changes.
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    # Google's permanent ID for the person ("sub" in the ID token), once they've used Google sign-in.
+    google_sub = Column(String, unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     @property
     def email_verified(self) -> bool:
         return self.email_verified_at is not None
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.hashed_password) and not self.hashed_password.startswith("!")
 
 
 class AuthToken(Base):
