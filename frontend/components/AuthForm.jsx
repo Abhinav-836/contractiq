@@ -149,6 +149,17 @@ export default function AuthForm({ mode }) {
                 onCredential={withGoogle}
                 disabled={busy}
               />
+              <p className="mt-3 text-center text-xs text-faint">
+                By continuing you agree to the{" "}
+                <Link href="/terms" className="underline underline-offset-2 hover:text-pen">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="underline underline-offset-2 hover:text-pen">
+                  Privacy policy
+                </Link>
+                .
+              </p>
               <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-wide text-faint" aria-hidden="true">
                 <span className="h-px flex-1 bg-rule" />
                 or with email

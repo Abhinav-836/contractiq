@@ -84,9 +84,17 @@ export default function SignatureFooter({ app = false }) {
               </nav>
             ) : null}
             {app && <p>ContractIQ flags risks to review. It isn&rsquo;t legal advice.</p>}
-            <a href="https://github.com/Abhinav-836/contractiq" className="mt-1 inline-block hover:text-pen">
-              Source on GitHub
-            </a>
+            <p className="mt-1 flex flex-wrap gap-x-4 sm:justify-end">
+              <Link href="/privacy" className="hover:text-pen">
+                Privacy
+              </Link>
+              <Link href="/terms" className="hover:text-pen">
+                Terms
+              </Link>
+              <a href="https://github.com/Abhinav-836/contractiq" className="hover:text-pen">
+                Source on GitHub
+              </a>
+            </p>
           </div>
         </div>
       </div>
