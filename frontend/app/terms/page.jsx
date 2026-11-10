@@ -8,7 +8,7 @@ export default function TermsPage() {
   return (
     <LegalPage title="Terms of service" updated="9 November 2026">
       <p>
-        These terms cover your use of ContractIQ, a contract review and e-signature tool built by Abhinav Ashutosh. By
+        These terms cover your use of ContractIQ, a contract review and e-signature tool built by Abhinav Ashutosh (Kavorin Tech). By
         creating an account or signing a document, you agree to them.
       </p>
 

@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy policy" updated="9 November 2026">
       <p>
-        ContractIQ is a contract review and e-signature tool built by Abhinav Ashutosh. This page explains what we
+        ContractIQ is a contract review and e-signature tool built by Abhinav Ashutosh (Kavorin Tech). This page explains what we
         store, why, and what you can ask us to do with it. We don&rsquo;t sell your data or use it for advertising.
       </p>
 
